@@ -6,9 +6,10 @@ import { Button } from '@/components/ui'
 interface HeaderProps {
   title: string
   subtitle?: string
+  onNewTask?: () => void
 }
 
-export function Header({ title, subtitle }: HeaderProps) {
+export function Header({ title, subtitle, onNewTask }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/5 bg-background/80 px-6 backdrop-blur-xl">
       <div>
@@ -29,7 +30,11 @@ export function Header({ title, subtitle }: HeaderProps) {
         </button>
 
         {/* New Task Button */}
-        <Button size="sm" className="gap-2 rounded-xl bg-gradient-to-r from-primary to-violet-500 shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30">
+        <Button
+          size="sm"
+          onClick={onNewTask}
+          className="gap-2 rounded-xl bg-gradient-to-r from-primary to-violet-500 shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30"
+        >
           <Plus className="h-4 w-4" />
           <span className="hidden sm:inline">Nový úkol</span>
         </Button>

@@ -1,7 +1,8 @@
 'use client'
 
+import * as React from 'react'
 import { Sidebar, Header } from '@/components/layout'
-import { AgentCard, TaskQueue, StatsCards, PendingQuestions } from '@/components/dashboard'
+import { AgentCard, TaskQueue, StatsCards, PendingQuestions, CreateTaskDialog } from '@/components/dashboard'
 import type { Agent, Task, DashboardStats, PendingQuestion } from '@/types'
 
 // Mock data - will be replaced with real data from Supabase
@@ -186,8 +187,19 @@ const mockPendingQuestions = mockTasks
   .map(t => ({ task: t, question: t.pendingQuestion! }))
 
 export default function DashboardPage() {
+  const [createTaskOpen, setCreateTaskOpen] = React.useState(false)
+
   return (
     <div className="relative min-h-screen bg-background">
+      {/* Create Task Dialog */}
+      <CreateTaskDialog
+        open={createTaskOpen}
+        onOpenChange={setCreateTaskOpen}
+        onSubmit={(task) => {
+          console.log('New task:', task)
+          // TODO: Send to API / Supabase
+        }}
+      />
       {/* Background gradient orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/20 blur-[100px]" />
@@ -200,6 +212,7 @@ export default function DashboardPage() {
         <Header
           title="Dashboard"
           subtitle="Přehled aktivit a úkolů"
+          onNewTask={() => setCreateTaskOpen(true)}
         />
         <main className="p-6 space-y-6">
           {/* Welcome message */}
