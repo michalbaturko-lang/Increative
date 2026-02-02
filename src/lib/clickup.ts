@@ -96,10 +96,17 @@ class ClickUpClient {
   }
 
   /**
-   * Get all lists in a space (includes folderless lists)
+   * Get folderless lists in a space
    */
   async getLists(spaceId: string): Promise<{ lists: ClickUpList[] }> {
     return this.request(`/space/${spaceId}/list`)
+  }
+
+  /**
+   * Get all folders in a space
+   */
+  async getFolders(spaceId: string): Promise<{ folders: { id: string; name: string; lists: ClickUpList[] }[] }> {
+    return this.request(`/space/${spaceId}/folder`)
   }
 
   /**
@@ -137,7 +144,7 @@ class ClickUpClient {
 
   /**
    * Get all tasks across all workspaces (convenience method)
-   * This fetches the hierarchy and returns tasks from all lists
+   * This fetches the hierarchy and returns tasks from all lists (including folders)
    */
   async getAllTasks(): Promise<{
     workspaces: ClickUpWorkspace[]
@@ -157,17 +164,49 @@ class ClickUpClient {
       const { spaces } = await this.getSpaces(workspace.id)
 
       for (const space of spaces) {
-        // Get lists in space
-        const { lists } = await this.getLists(space.id)
-
-        for (const list of lists) {
-          // Get tasks in list
-          try {
-            const { tasks } = await this.getTasks(list.id, { archived: false })
-            allTasks.push(...tasks)
-          } catch (e) {
-            console.error(`Failed to get tasks from list ${list.id}:`, e)
+        // 1. Get folderless lists in space
+        try {
+          const { lists: folderlessLists } = await this.getLists(space.id)
+          for (const list of folderlessLists) {
+            try {
+              const { tasks } = await this.getTasks(list.id, { archived: false })
+              allTasks.push(...tasks)
+            } catch (e) {
+              console.error(`Failed to get tasks from list ${list.id}:`, e)
+            }
           }
+        } catch (e) {
+          console.error(`Failed to get folderless lists from space ${space.id}:`, e)
+        }
+
+        // 2. Get folders and their lists
+        try {
+          const { folders } = await this.getFolders(space.id)
+          for (const folder of folders) {
+            // Folders may include lists directly in response, or we need to fetch them
+            const listsToProcess = folder.lists || []
+
+            // If folder doesn't include lists, fetch them separately
+            if (listsToProcess.length === 0) {
+              try {
+                const { lists: folderLists } = await this.getFolderLists(folder.id)
+                listsToProcess.push(...folderLists)
+              } catch (e) {
+                console.error(`Failed to get lists from folder ${folder.id}:`, e)
+              }
+            }
+
+            for (const list of listsToProcess) {
+              try {
+                const { tasks } = await this.getTasks(list.id, { archived: false })
+                allTasks.push(...tasks)
+              } catch (e) {
+                console.error(`Failed to get tasks from list ${list.id}:`, e)
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`Failed to get folders from space ${space.id}:`, e)
         }
       }
     }
