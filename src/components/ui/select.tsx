@@ -16,9 +16,10 @@ interface SelectProps {
   options: SelectOption[]
   placeholder?: string
   className?: string
+  disabled?: boolean
 }
 
-export function Select({ value, onValueChange, options, placeholder = 'Vyber...', className }: SelectProps) {
+export function Select({ value, onValueChange, options, placeholder = 'Vyber...', className, disabled }: SelectProps) {
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef<HTMLDivElement>(null)
 
@@ -38,12 +39,14 @@ export function Select({ value, onValueChange, options, placeholder = 'Vyber...'
     <div ref={ref} className={cn('relative', className)}>
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => !disabled && setOpen(!open)}
+        disabled={disabled}
         className={cn(
           'flex h-10 w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm transition-colors',
           'hover:border-white/20 hover:bg-white/10',
           'focus:outline-none focus:ring-2 focus:ring-primary/50',
-          open && 'border-primary/50 ring-2 ring-primary/20'
+          open && 'border-primary/50 ring-2 ring-primary/20',
+          disabled && 'opacity-50 cursor-not-allowed hover:border-white/10 hover:bg-white/5'
         )}
       >
         <span className={cn(
