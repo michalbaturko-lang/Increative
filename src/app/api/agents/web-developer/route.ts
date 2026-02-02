@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, AGENT_PROMPTS } from '@/lib/claude'
 import { createServerClient } from '@/lib/supabase'
+import { analyzeWebsite, WebsiteAnalysis } from '@/lib/web-tools'
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
-const GITHUB_ORG = process.env.GITHUB_ORG || 'increative-websites'
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN
 const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID
 
@@ -11,24 +11,139 @@ interface WebsiteFile {
   [path: string]: string
 }
 
+interface DesignConcept {
+  name: string
+  style: string
+  description: string
+  colorScheme: {
+    primary: string
+    secondary: string
+    accent: string
+    background: string
+    text: string
+  }
+  typography: {
+    headingFont: string
+    bodyFont: string
+  }
+  keyFeatures: string[]
+}
+
 interface GeneratedProject {
   projectName: string
   description: string
   files: WebsiteFile
+  chosenDesign?: DesignConcept
 }
 
-// Generate website code using Claude
-async function generateWebsite(brief: string, existingUrl?: string): Promise<GeneratedProject> {
-  const taskPrompt = existingUrl
-    ? `Udělej redesign webu ${existingUrl}.
+// Analyze existing website
+async function analyzeExistingWebsite(url: string): Promise<WebsiteAnalysis | null> {
+  try {
+    return await analyzeWebsite(url, {
+      includePageSpeed: true,
+      includeScreenshot: true,
+    })
+  } catch (error) {
+    console.error('Failed to analyze website:', error)
+    return null
+  }
+}
 
-Zadání od klienta:
+// Generate 3 design concepts
+async function generateDesignConcepts(brief: string, analysis: WebsiteAnalysis | null): Promise<DesignConcept[]> {
+  const analysisContext = analysis ? `
+ANALÝZA SOUČASNÉHO WEBU:
+- URL: ${analysis.crawl.url}
+- Title: ${analysis.crawl.title}
+- Popis: ${analysis.crawl.description}
+- Tech stack: ${analysis.crawl.techStack.join(', ') || 'Neznámý'}
+- Silné stránky: ${analysis.summary.strengths.join(', ')}
+- Slabé stránky: ${analysis.summary.weaknesses.join(', ')}
+${analysis.pageSpeed ? `- Výkon: ${analysis.pageSpeed.performance}/100, SEO: ${analysis.pageSpeed.seo}/100` : ''}
+` : ''
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2048,
+    messages: [
+      {
+        role: 'user',
+        content: `Jsi expert na web design. Vytvoř 3 různé koncepty redesignu webu.
+
+ZADÁNÍ:
 ${brief}
 
-Analyzuj současný web a vytvoř moderní redesign.`
-    : `Vytvoř nový web podle tohoto zadání:
+${analysisContext}
 
-${brief}`
+Vytvoř 3 VÝRAZNĚ odlišné návrhy:
+1. Moderní minimalistický - čisté, hodně prostoru
+2. Odvážný kreativní - výrazné barvy, unikátní layout
+3. Profesionální důvěryhodný - konzervativní, čitelný
+
+Odpověz POUZE validním JSON:
+{
+  "concepts": [
+    {
+      "name": "Název",
+      "style": "minimalist|bold|corporate",
+      "description": "2-3 věty",
+      "colorScheme": {
+        "primary": "#hex",
+        "secondary": "#hex",
+        "accent": "#hex",
+        "background": "#hex",
+        "text": "#hex"
+      },
+      "typography": {
+        "headingFont": "Google Font",
+        "bodyFont": "Google Font"
+      },
+      "keyFeatures": ["feature1", "feature2", "feature3"]
+    }
+  ],
+  "recommendation": {
+    "bestChoice": 0,
+    "reason": "Proč je tento nejlepší"
+  }
+}`,
+      },
+    ],
+  })
+
+  const outputText = response.content[0].type === 'text' ? response.content[0].text : ''
+
+  try {
+    const jsonMatch = outputText.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      const result = JSON.parse(jsonMatch[0])
+      return result.concepts || []
+    }
+  } catch {}
+
+  return []
+}
+
+// Generate website code with chosen design
+async function generateWebsite(
+  brief: string,
+  analysis: WebsiteAnalysis | null,
+  chosenDesign: DesignConcept | null
+): Promise<GeneratedProject> {
+  const analysisContext = analysis ? `
+ANALÝZA PŮVODNÍHO WEBU:
+- Struktura: ${analysis.crawl.h1.join(', ')} (H1), ${analysis.crawl.h2.length} H2 nadpisů
+- Obsah: ${analysis.crawl.wordCount} slov
+- Meta: ${analysis.crawl.title} | ${analysis.crawl.description}
+` : ''
+
+  const designContext = chosenDesign ? `
+VYBRANÝ DESIGN:
+- Styl: ${chosenDesign.name} (${chosenDesign.style})
+- Popis: ${chosenDesign.description}
+- Barvy: Primary ${chosenDesign.colorScheme.primary}, Secondary ${chosenDesign.colorScheme.secondary}, Accent ${chosenDesign.colorScheme.accent}
+- Fonty: ${chosenDesign.typography.headingFont} (nadpisy), ${chosenDesign.typography.bodyFont} (text)
+- Features: ${chosenDesign.keyFeatures.join(', ')}
+` : ''
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -37,34 +152,60 @@ ${brief}`
     messages: [
       {
         role: 'user',
-        content: `${taskPrompt}
+        content: `Vytvoř kompletní Next.js web podle tohoto zadání:
 
-Vytvoř kompletní Next.js projekt s Tailwind CSS. Zahrň:
-- package.json s potřebnými dependencies
-- tailwind.config.js
-- app/layout.tsx
-- app/page.tsx
+ZADÁNÍ:
+${brief}
+
+${analysisContext}
+${designContext}
+
+Vytvoř kompletní Next.js 14 projekt s:
+- package.json (dependencies: next, react, react-dom, tailwindcss, @tailwindcss/typography)
+- tailwind.config.js (s custom barvami z designu)
+- next.config.js
+- app/layout.tsx (s Google Fonts)
+- app/page.tsx (hlavní stránka)
 - app/globals.css
-- Všechny další potřebné komponenty
+- components/ (potřebné komponenty)
 
-DŮLEŽITÉ: Odpověz POUZE validním JSON objektem bez markdown formátování.`,
+DŮLEŽITÉ: Odpověz POUZE validním JSON bez markdown:
+{
+  "projectName": "nazev-projektu",
+  "description": "Popis projektu",
+  "files": {
+    "package.json": "obsah souboru",
+    "tailwind.config.js": "obsah",
+    "app/layout.tsx": "obsah",
+    "app/page.tsx": "obsah",
+    "app/globals.css": "obsah"
+  }
+}`,
       },
     ],
   })
 
   const outputText = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // Parse JSON from response (handle potential markdown code blocks)
   let jsonStr = outputText
   const jsonMatch = outputText.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (jsonMatch) {
     jsonStr = jsonMatch[1]
   }
 
+  // Try to find JSON object
+  const objectMatch = jsonStr.match(/\{[\s\S]*\}/)
+  if (objectMatch) {
+    jsonStr = objectMatch[0]
+  }
+
   try {
-    return JSON.parse(jsonStr.trim())
+    const project = JSON.parse(jsonStr.trim())
+    return {
+      ...project,
+      chosenDesign,
+    }
   } catch {
-    // If parsing fails, create a basic structure from the text
     throw new Error('Nepodařilo se vygenerovat projekt. Zkuste to znovu.')
   }
 }
@@ -93,7 +234,6 @@ async function createGitHubRepo(projectName: string, description: string): Promi
   if (!response.ok) {
     const error = await response.json()
     if (error.errors?.[0]?.message?.includes('already exists')) {
-      // Repo exists, return its URL
       const userResponse = await fetch('https://api.github.com/user', {
         headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}` }
       })
@@ -109,16 +249,12 @@ async function createGitHubRepo(projectName: string, description: string): Promi
 
 // Push files to GitHub
 async function pushToGitHub(repoUrl: string, files: WebsiteFile): Promise<void> {
-  if (!GITHUB_TOKEN) {
-    throw new Error('GitHub token není nakonfigurován')
-  }
+  if (!GITHUB_TOKEN) throw new Error('GitHub token není nakonfigurován')
 
-  // Extract owner and repo from URL
   const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/)
   if (!match) throw new Error('Neplatná URL repozitáře')
   const [, owner, repo] = match
 
-  // Create tree entries
   const treeEntries = Object.entries(files).map(([path, content]) => ({
     path,
     mode: '100644' as const,
@@ -126,7 +262,6 @@ async function pushToGitHub(repoUrl: string, files: WebsiteFile): Promise<void> 
     content,
   }))
 
-  // Create tree
   const treeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees`, {
     method: 'POST',
     headers: {
@@ -134,18 +269,13 @@ async function pushToGitHub(repoUrl: string, files: WebsiteFile): Promise<void> 
       'Accept': 'application/vnd.github+json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      tree: treeEntries,
-    }),
+    body: JSON.stringify({ tree: treeEntries }),
   })
 
-  if (!treeResponse.ok) {
-    throw new Error('Nepodařilo se vytvořit soubory na GitHubu')
-  }
+  if (!treeResponse.ok) throw new Error('Nepodařilo se vytvořit soubory')
 
   const tree = await treeResponse.json()
 
-  // Create commit
   const commitResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/commits`, {
     method: 'POST',
     headers: {
@@ -159,13 +289,10 @@ async function pushToGitHub(repoUrl: string, files: WebsiteFile): Promise<void> 
     }),
   })
 
-  if (!commitResponse.ok) {
-    throw new Error('Nepodařilo se vytvořit commit')
-  }
+  if (!commitResponse.ok) throw new Error('Nepodařilo se vytvořit commit')
 
   const commit = await commitResponse.json()
 
-  // Update main branch reference
   const refResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/main`, {
     method: 'PATCH',
     headers: {
@@ -173,13 +300,9 @@ async function pushToGitHub(repoUrl: string, files: WebsiteFile): Promise<void> 
       'Accept': 'application/vnd.github+json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      sha: commit.sha,
-      force: true,
-    }),
+    body: JSON.stringify({ sha: commit.sha, force: true }),
   })
 
-  // If main doesn't exist, create it
   if (!refResponse.ok) {
     await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
       method: 'POST',
@@ -188,26 +311,19 @@ async function pushToGitHub(repoUrl: string, files: WebsiteFile): Promise<void> 
         'Accept': 'application/vnd.github+json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        ref: 'refs/heads/main',
-        sha: commit.sha,
-      }),
+      body: JSON.stringify({ ref: 'refs/heads/main', sha: commit.sha }),
     })
   }
 }
 
 // Deploy to Vercel
 async function deployToVercel(projectName: string, repoUrl: string): Promise<string> {
-  if (!VERCEL_TOKEN) {
-    throw new Error('Vercel token není nakonfigurován')
-  }
+  if (!VERCEL_TOKEN) throw new Error('Vercel token není nakonfigurován')
 
-  // Extract owner and repo from URL
   const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/)
-  if (!match) throw new Error('Neplatná URL repozitáře')
+  if (!match) throw new Error('Neplatná URL')
   const [, owner, repo] = match
 
-  // Create Vercel project
   const projectResponse = await fetch('https://api.vercel.com/v10/projects', {
     method: 'POST',
     headers: {
@@ -217,43 +333,17 @@ async function deployToVercel(projectName: string, repoUrl: string): Promise<str
     body: JSON.stringify({
       name: projectName,
       framework: 'nextjs',
-      gitRepository: {
-        type: 'github',
-        repo: `${owner}/${repo}`,
-      },
+      gitRepository: { type: 'github', repo: `${owner}/${repo}` },
       ...(VERCEL_TEAM_ID && { teamId: VERCEL_TEAM_ID }),
     }),
   })
 
   if (!projectResponse.ok) {
     const error = await projectResponse.json()
-    // If project exists, trigger a new deployment
     if (error.error?.code === 'PROJECT_EXISTS') {
-      // Trigger deployment
-      const deployResponse = await fetch('https://api.vercel.com/v13/deployments', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${VERCEL_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: projectName,
-          gitSource: {
-            type: 'github',
-            repo: `${owner}/${repo}`,
-            ref: 'main',
-          },
-          ...(VERCEL_TEAM_ID && { teamId: VERCEL_TEAM_ID }),
-        }),
-      })
-
-      if (deployResponse.ok) {
-        const deployment = await deployResponse.json()
-        return `https://${deployment.url || `${projectName}.vercel.app`}`
-      }
       return `https://${projectName}.vercel.app`
     }
-    throw new Error(`Vercel: ${error.error?.message || 'Nepodařilo se vytvořit projekt'}`)
+    throw new Error(`Vercel: ${error.error?.message || 'Chyba'}`)
   }
 
   const project = await projectResponse.json()
@@ -263,49 +353,91 @@ async function deployToVercel(projectName: string, repoUrl: string): Promise<str
 export async function POST(request: NextRequest) {
   const supabase = createServerClient()
   let taskId: string | null = null
-  let dbError: string | null = null
 
   try {
     const body = await request.json()
-    const { title, description, clientName, existingUrl, priority = 'medium' } = body
+    const {
+      title,
+      description,
+      clientName,
+      existingUrl,
+      priority = 'medium',
+      selectedDesignIndex,
+      mode = 'full' // 'analyze' | 'designs' | 'full'
+    } = body
 
-    // STEP 0: Save task IMMEDIATELY with 'processing' status
-    try {
-      const { data: newTask, error } = await supabase.from('tasks').insert({
-        type: 'web_development',
-        title,
-        description,
-        status: 'processing',
-        priority,
-        client_name: clientName || null,
-        agent_type: 'web_developer',
-        output: 'Generuji web...',
-        metadata: { existingUrl },
-      }).select('id').single()
+    // STEP 0: Save task
+    const { data: newTask, error: dbError } = await supabase.from('tasks').insert({
+      type: 'web_development',
+      title,
+      description,
+      status: 'processing',
+      priority,
+      client_name: clientName || null,
+      agent_type: 'web_developer',
+      output: 'Analyzuji web...',
+      metadata: { existingUrl, mode },
+    }).select('id').single()
 
-      if (error) {
-        console.error('Failed to create task:', error)
-        dbError = `DB Error: ${error.message}`
-      } else {
-        taskId = newTask.id
-      }
-    } catch (dbErr) {
-      console.error('Failed to save task to database:', dbErr)
-      dbError = `DB Exception: ${dbErr instanceof Error ? dbErr.message : 'Unknown'}`
-    }
-
-    // If we couldn't save the task, return error immediately
-    if (!taskId) {
+    if (dbError) {
       return NextResponse.json({
         success: false,
-        error: dbError || 'Nepodařilo se uložit úkol do databáze. Zkontrolujte SUPABASE_SERVICE_ROLE_KEY.',
+        error: `DB Error: ${dbError.message}`,
       }, { status: 500 })
     }
 
-    // Step 1: Generate website code
-    const project = await generateWebsite(description, existingUrl)
+    taskId = newTask.id
 
-    // Sanitize project name for GitHub/Vercel
+    // STEP 1: Analyze existing website (if URL provided)
+    let analysis: WebsiteAnalysis | null = null
+    if (existingUrl) {
+      await supabase.from('tasks').update({ output: 'Analyzuji existující web...' }).eq('id', taskId)
+      analysis = await analyzeExistingWebsite(existingUrl)
+    }
+
+    // If mode is 'analyze', return just the analysis
+    if (mode === 'analyze') {
+      await supabase.from('tasks').update({
+        status: 'completed',
+        output: JSON.stringify(analysis, null, 2),
+        metadata: { existingUrl, analysis },
+      }).eq('id', taskId)
+
+      return NextResponse.json({
+        success: true,
+        mode: 'analyze',
+        taskId,
+        analysis,
+      })
+    }
+
+    // STEP 2: Generate 3 design concepts
+    await supabase.from('tasks').update({ output: 'Generuji 3 návrhy designu...' }).eq('id', taskId)
+    const designConcepts = await generateDesignConcepts(description, analysis)
+
+    // If mode is 'designs', return concepts for user to choose
+    if (mode === 'designs') {
+      await supabase.from('tasks').update({
+        status: 'needs_review',
+        output: 'Vyberte jeden z návrhů designu',
+        metadata: { existingUrl, analysis, designConcepts },
+      }).eq('id', taskId)
+
+      return NextResponse.json({
+        success: true,
+        mode: 'designs',
+        taskId,
+        analysis,
+        designConcepts,
+      })
+    }
+
+    // STEP 3: Generate website code
+    await supabase.from('tasks').update({ output: 'Generuji kód webu...' }).eq('id', taskId)
+
+    const chosenDesign = designConcepts[selectedDesignIndex ?? 0] || null
+    const project = await generateWebsite(description, analysis, chosenDesign)
+
     const sanitizedName = project.projectName
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, '-')
@@ -315,65 +447,73 @@ export async function POST(request: NextRequest) {
     let githubUrl = ''
     let vercelUrl = ''
 
-    // Step 2: Create GitHub repo and push code
+    // STEP 4: Push to GitHub
     if (GITHUB_TOKEN) {
+      await supabase.from('tasks').update({ output: 'Vytvářím GitHub repozitář...' }).eq('id', taskId)
       try {
         githubUrl = await createGitHubRepo(sanitizedName, project.description)
         await pushToGitHub(githubUrl, project.files)
       } catch (error) {
         console.error('GitHub error:', error)
-        // Continue without GitHub
       }
     }
 
-    // Step 3: Deploy to Vercel
+    // STEP 5: Deploy to Vercel
     if (VERCEL_TOKEN && githubUrl) {
+      await supabase.from('tasks').update({ output: 'Deployuji na Vercel...' }).eq('id', taskId)
       try {
         vercelUrl = await deployToVercel(sanitizedName, githubUrl)
       } catch (error) {
         console.error('Vercel error:', error)
-        // Continue without Vercel
       }
     }
 
-    // Build output summary
+    // Build output
     const output = `# ${project.projectName}
 
 ${project.description}
 
+## Analýza původního webu
+${analysis ? `- Skóre: ${analysis.summary.overallScore}/100
+- Silné stránky: ${analysis.summary.strengths.join(', ')}
+- Slabé stránky: ${analysis.summary.weaknesses.join(', ')}` : 'Nebyla provedena'}
+
+## Vybraný design
+${chosenDesign ? `- **${chosenDesign.name}** (${chosenDesign.style})
+- ${chosenDesign.description}
+- Barvy: ${chosenDesign.colorScheme.primary}, ${chosenDesign.colorScheme.secondary}` : 'Výchozí design'}
+
 ## Odkazy
-${githubUrl ? `- **GitHub**: ${githubUrl}` : '- GitHub: Není nakonfigurován (nastavte GITHUB_TOKEN)'}
-${vercelUrl ? `- **Web**: ${vercelUrl}` : '- Vercel: Není nakonfigurován (nastavte VERCEL_TOKEN)'}
+${githubUrl ? `- **GitHub**: ${githubUrl}` : '- GitHub: Nenastaveno'}
+${vercelUrl ? `- **Web**: ${vercelUrl}` : '- Vercel: Nenastaveno'}
 
-## Vygenerované soubory
-${Object.keys(project.files).map(f => `- \`${f}\``).join('\n')}
-
-## Další kroky
-1. ${vercelUrl ? `Zkontrolujte web na ${vercelUrl}` : 'Nasaďte projekt na Vercel'}
-2. Připojte vlastní doménu
-3. Nastavte analytics a monitoring`
+## Soubory
+${Object.keys(project.files).map(f => `- \`${f}\``).join('\n')}`
 
     const finalStatus = vercelUrl ? 'completed' : 'needs_review'
 
-    // STEP 4: Update task with result
-    if (taskId) {
-      await supabase.from('tasks').update({
-        status: finalStatus,
-        output,
-        metadata: {
-          projectName: project.projectName,
-          githubUrl,
-          vercelUrl,
-          files: Object.keys(project.files),
-        },
-      }).eq('id', taskId)
-    }
+    await supabase.from('tasks').update({
+      status: finalStatus,
+      output,
+      metadata: {
+        projectName: project.projectName,
+        githubUrl,
+        vercelUrl,
+        files: Object.keys(project.files),
+        analysis: analysis?.summary,
+        chosenDesign,
+        allDesigns: designConcepts,
+      },
+    }).eq('id', taskId)
 
     return NextResponse.json({
       success: true,
       status: finalStatus,
       taskId,
       projectName: project.projectName,
+      analysis: analysis?.summary,
+      designConcepts,
+      chosenDesign,
       githubUrl,
       vercelUrl,
       output,
@@ -382,7 +522,6 @@ ${Object.keys(project.files).map(f => `- \`${f}\``).join('\n')}
   } catch (error) {
     console.error('Web Developer API Error:', error)
 
-    // Update task as failed if we have taskId
     if (taskId) {
       await supabase.from('tasks').update({
         status: 'failed',
@@ -390,13 +529,10 @@ ${Object.keys(project.files).map(f => `- \`${f}\``).join('\n')}
       }).eq('id', taskId)
     }
 
-    return NextResponse.json(
-      {
-        success: false,
-        taskId,
-        error: error instanceof Error ? error.message : 'Neznámá chyba',
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      success: false,
+      taskId,
+      error: error instanceof Error ? error.message : 'Neznámá chyba',
+    }, { status: 500 })
   }
 }
