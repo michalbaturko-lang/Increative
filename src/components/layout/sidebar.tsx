@@ -16,6 +16,8 @@ import {
   History,
   Activity,
   CheckSquare,
+  Globe,
+  Search,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -29,6 +31,11 @@ const navigation = [
   { name: 'Klienti', href: '/clients', icon: Users },
   { name: 'Knowledge Base', href: '/knowledge', icon: FolderKanban },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+]
+
+const projectsNavigation = [
+  { name: 'Nový web', href: '/projects/web/new', icon: Globe },
+  { name: 'SEO Audit', href: '/projects/seo/new', icon: Search },
 ]
 
 const bottomNavigation = [
@@ -70,7 +77,7 @@ export function Sidebar() {
         </div>
 
         {/* Main Navigation */}
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="flex-1 space-y-1 px-3 overflow-y-auto">
           <p className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Hlavní menu
           </p>
@@ -94,6 +101,35 @@ export function Sidebar() {
                 {item.name}
                 {isActive && (
                   <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-foreground" />
+                )}
+              </Link>
+            )
+          })}
+
+          {/* Projects Section */}
+          <p className="px-3 py-2 pt-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Projekty
+          </p>
+          {projectsNavigation.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                  isActive
+                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-600/25'
+                    : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                )}
+              >
+                <item.icon className={cn(
+                  'h-5 w-5 transition-transform duration-200',
+                  !isActive && 'group-hover:scale-110'
+                )} />
+                {item.name}
+                {isActive && (
+                  <div className="ml-auto h-1.5 w-1.5 rounded-full bg-white" />
                 )}
               </Link>
             )
