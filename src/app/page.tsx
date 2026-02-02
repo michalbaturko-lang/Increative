@@ -195,9 +195,9 @@ export default function DashboardPage() {
       <CreateTaskDialog
         open={createTaskOpen}
         onOpenChange={setCreateTaskOpen}
-        onSubmit={(task) => {
-          console.log('New task:', task)
-          // TODO: Send to API / Supabase
+        onSubmit={(task, result) => {
+          console.log('Task completed:', task, result)
+          // TODO: Save to Supabase
         }}
       />
       {/* Background gradient orbs */}

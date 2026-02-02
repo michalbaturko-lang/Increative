@@ -12,6 +12,12 @@ import {
   Code,
   Sparkles,
   Zap,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  RefreshCw,
+  ArrowLeft,
+  Brain,
 } from 'lucide-react'
 import {
   Dialog,
@@ -29,7 +35,7 @@ import type { TaskType, TaskPriority } from '@/types'
 interface CreateTaskDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit?: (task: TaskFormData) => void
+  onSubmit?: (task: TaskFormData, result: TaskResult) => void
 }
 
 interface TaskFormData {
@@ -38,6 +44,14 @@ interface TaskFormData {
   description: string
   priority: TaskPriority
   clientName: string
+}
+
+interface TaskResult {
+  success: boolean
+  status: 'completed' | 'needs_input' | 'needs_review' | 'error'
+  output?: string
+  question?: string
+  feedback?: string
 }
 
 const taskTypes = [
@@ -58,7 +72,10 @@ const priorities = [
   { value: 'urgent', label: 'Urgentní', color: 'bg-red-500/20 text-red-400' },
 ]
 
+type DialogStep = 'form' | 'processing' | 'result'
+
 export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDialogProps) {
+  const [step, setStep] = React.useState<DialogStep>('form')
   const [formData, setFormData] = React.useState<TaskFormData>({
     type: 'content_creation',
     title: '',
@@ -66,22 +83,18 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
     priority: 'medium',
     clientName: '',
   })
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [result, setResult] = React.useState<TaskResult | null>(null)
+  const [processingStep, setProcessingStep] = React.useState(0)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.title.trim()) return
+  const processingSteps = [
+    'Analyzuji úkol...',
+    'Vybírám vhodného agenta...',
+    'Agent pracuje...',
+    'Supervisor kontroluje výstup...',
+  ]
 
-    setIsSubmitting(true)
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    onSubmit?.(formData)
-    setIsSubmitting(false)
-    onOpenChange(false)
-
-    // Reset form
+  const resetDialog = () => {
+    setStep('form')
     setFormData({
       type: 'content_creation',
       title: '',
@@ -89,134 +102,329 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
       priority: 'medium',
       clientName: '',
     })
+    setResult(null)
+    setProcessingStep(0)
+  }
+
+  const handleClose = () => {
+    onOpenChange(false)
+    setTimeout(resetDialog, 300) // Reset after animation
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.title.trim()) return
+
+    setStep('processing')
+    setProcessingStep(0)
+
+    // Simulate processing steps
+    const stepInterval = setInterval(() => {
+      setProcessingStep((prev) => Math.min(prev + 1, processingSteps.length - 1))
+    }, 1500)
+
+    try {
+      const response = await fetch('/api/agents/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskType: formData.type,
+          title: formData.title,
+          description: formData.description,
+          clientName: formData.clientName,
+          priority: formData.priority,
+        }),
+      })
+
+      clearInterval(stepInterval)
+
+      const data = await response.json()
+
+      setResult({
+        success: data.success,
+        status: data.status || (data.success ? 'completed' : 'error'),
+        output: data.output,
+        question: data.question,
+        feedback: data.feedback,
+      })
+
+      setStep('result')
+      onSubmit?.(formData, data)
+    } catch (error) {
+      clearInterval(stepInterval)
+      setResult({
+        success: false,
+        status: 'error',
+        output: error instanceof Error ? error.message : 'Neznámá chyba',
+      })
+      setStep('result')
+    }
+  }
+
+  const copyToClipboard = () => {
+    if (result?.output) {
+      navigator.clipboard.writeText(result.output)
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl" onClose={() => onOpenChange(false)}>
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-violet-500">
-              <Sparkles className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <DialogTitle>Nový úkol</DialogTitle>
-              <DialogDescription>Zadej úkol pro AI agenty</DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Task Type */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Typ úkolu</label>
-            <Select
-              value={formData.type}
-              onValueChange={(value) => setFormData({ ...formData, type: value as TaskType })}
-              options={taskTypes}
-              placeholder="Vyber typ úkolu"
-            />
-          </div>
-
-          {/* Title */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Název úkolu</label>
-            <Input
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="např. SEO audit pro e-shop Krásná móda"
-              className="bg-white/5 border-white/10"
-            />
-          </div>
-
-          {/* Client */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Klient <span className="text-muted-foreground">(volitelné)</span></label>
-            <Input
-              value={formData.clientName}
-              onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-              placeholder="Název klienta"
-              className="bg-white/5 border-white/10"
-            />
-          </div>
-
-          {/* Description */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Popis</label>
-            <Textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Popiš, co přesně má agent udělat. Čím víc detailů, tím lepší výsledek."
-              className="min-h-[100px] bg-white/5 border-white/10"
-            />
-          </div>
-
-          {/* Priority */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Priorita</label>
-            <div className="flex gap-2">
-              {priorities.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, priority: p.value as TaskPriority })}
-                  className={cn(
-                    'flex-1 rounded-xl border py-2 text-sm font-medium transition-all',
-                    formData.priority === p.value
-                      ? `${p.color} border-current`
-                      : 'border-white/10 bg-white/5 text-muted-foreground hover:border-white/20'
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* AI Suggestion Box */}
-          <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-violet-500/20 p-2">
-                <Zap className="h-4 w-4 text-violet-400" />
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className={cn('transition-all duration-300', step === 'result' ? 'max-w-3xl' : 'max-w-xl')} onClose={handleClose}>
+        {/* FORM STEP */}
+        {step === 'form' && (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-violet-500">
+                  <Sparkles className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <DialogTitle>Nový úkol</DialogTitle>
+                  <DialogDescription>Zadej úkol pro AI agenty</DialogDescription>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-violet-300">Tip od AI</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Pro nejlepší výsledky přidej do popisu konkrétní požadavky, cílovou skupinu,
-                  a případně odkaz na web klienta pro analýzu stylu.
+            </DialogHeader>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Task Type */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Typ úkolu</label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value) => setFormData({ ...formData, type: value as TaskType })}
+                  options={taskTypes}
+                  placeholder="Vyber typ úkolu"
+                />
+              </div>
+
+              {/* Title */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Název úkolu</label>
+                <Input
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="např. SEO audit pro e-shop Krásná móda"
+                  className="bg-white/5 border-white/10"
+                />
+              </div>
+
+              {/* Client */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Klient <span className="text-muted-foreground">(volitelné)</span></label>
+                <Input
+                  value={formData.clientName}
+                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                  placeholder="Název klienta"
+                  className="bg-white/5 border-white/10"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Popis</label>
+                <Textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Popiš, co přesně má agent udělat. Čím víc detailů, tím lepší výsledek."
+                  className="min-h-[100px] bg-white/5 border-white/10"
+                />
+              </div>
+
+              {/* Priority */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Priorita</label>
+                <div className="flex gap-2">
+                  {priorities.map((p) => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, priority: p.value as TaskPriority })}
+                      className={cn(
+                        'flex-1 rounded-xl border py-2 text-sm font-medium transition-all',
+                        formData.priority === p.value
+                          ? `${p.color} border-current`
+                          : 'border-white/10 bg-white/5 text-muted-foreground hover:border-white/20'
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* AI Suggestion Box */}
+              <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-violet-500/20 p-2">
+                    <Zap className="h-4 w-4 text-violet-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-violet-300">Tip od AI</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Pro nejlepší výsledky přidej do popisu konkrétní požadavky, cílovou skupinu,
+                      a případně odkaz na web klienta pro analýzu stylu.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleClose}
+                >
+                  Zrušit
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!formData.title.trim()}
+                  className="gap-2 bg-gradient-to-r from-primary to-violet-500"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Spustit agenta
+                </Button>
+              </DialogFooter>
+            </form>
+          </>
+        )}
+
+        {/* PROCESSING STEP */}
+        {step === 'processing' && (
+          <div className="py-12">
+            <div className="flex flex-col items-center gap-6">
+              {/* Animated brain icon */}
+              <div className="relative">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary to-violet-500 blur-xl opacity-50 animate-pulse" />
+                <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary to-violet-500">
+                  <Brain className="h-10 w-10 text-white animate-pulse" />
+                </div>
+              </div>
+
+              <div className="text-center space-y-2">
+                <h3 className="text-lg font-semibold">Agent pracuje</h3>
+                <p className="text-sm text-muted-foreground">
+                  {processingSteps[processingStep]}
                 </p>
               </div>
+
+              {/* Progress steps */}
+              <div className="flex gap-2">
+                {processingSteps.map((_, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'h-1.5 w-8 rounded-full transition-all duration-500',
+                      i <= processingStep ? 'bg-primary' : 'bg-white/10'
+                    )}
+                  />
+                ))}
+              </div>
             </div>
           </div>
+        )}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Zrušit
-            </Button>
-            <Button
-              type="submit"
-              disabled={!formData.title.trim() || isSubmitting}
-              className="gap-2 bg-gradient-to-r from-primary to-violet-500"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Vytvářím...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Vytvořit úkol
-                </>
+        {/* RESULT STEP */}
+        {step === 'result' && result && (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-xl',
+                  result.success ? 'bg-emerald-500/20' : 'bg-red-500/20'
+                )}>
+                  {result.success ? (
+                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-red-400" />
+                  )}
+                </div>
+                <div>
+                  <DialogTitle>
+                    {result.status === 'completed' && 'Úkol dokončen'}
+                    {result.status === 'needs_input' && 'Agent má dotaz'}
+                    {result.status === 'needs_review' && 'Ke kontrole'}
+                    {result.status === 'error' && 'Chyba'}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {formData.title}
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Question from agent */}
+              {result.status === 'needs_input' && result.question && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-amber-500/20 p-2">
+                      <AlertCircle className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-amber-300">Agent se ptá:</p>
+                      <p className="text-sm mt-1">{result.question}</p>
+                    </div>
+                  </div>
+                </div>
               )}
-            </Button>
-          </DialogFooter>
-        </form>
+
+              {/* Output */}
+              {result.output && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Výstup agenta</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={copyToClipboard}
+                      className="gap-2 text-xs"
+                    >
+                      <Copy className="h-3 w-3" />
+                      Kopírovat
+                    </Button>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 max-h-[400px] overflow-y-auto">
+                    <pre className="text-sm whitespace-pre-wrap font-sans">{result.output}</pre>
+                  </div>
+                </div>
+              )}
+
+              {/* Feedback */}
+              {result.feedback && (
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+                  <p className="text-sm font-medium text-blue-300">Poznámka od Supervisora:</p>
+                  <p className="text-sm mt-1 text-muted-foreground">{result.feedback}</p>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setStep('form')}
+                className="gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Nový úkol
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleSubmit}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Zkusit znovu
+              </Button>
+              <Button
+                onClick={handleClose}
+                className="bg-gradient-to-r from-primary to-violet-500"
+              >
+                Hotovo
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )
