@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { executeAgentTask, supervisorReview, AgentType } from '@/lib/claude'
+import { createServerClient } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
       context,
     })
 
-    // If agent needs human input, return early
+    // If agent needs human input, return early (don't save yet)
     if (result.needsHumanInput) {
       return NextResponse.json({
         success: true,
@@ -49,10 +50,33 @@ export async function POST(request: NextRequest) {
       agentType,
     })
 
+    const finalOutput = review.improvedOutput || result.output
+    const status = review.approved ? 'completed' : 'needs_review'
+
+    // Save task to Supabase
+    try {
+      const supabase = createServerClient()
+      await supabase.from('tasks').insert({
+        type: taskType,
+        title,
+        description,
+        status,
+        priority,
+        client_name: clientName || null,
+        agent_type: agentType,
+        output: finalOutput,
+        feedback: review.feedback || null,
+        needs_review: !review.approved,
+      })
+    } catch (dbError) {
+      console.error('Failed to save task to database:', dbError)
+      // Continue - don't fail the whole request if DB save fails
+    }
+
     return NextResponse.json({
       success: result.success,
-      status: review.approved ? 'completed' : 'needs_review',
-      output: review.improvedOutput || result.output,
+      status,
+      output: finalOutput,
       feedback: review.feedback,
       approved: review.approved,
     })
