@@ -24,6 +24,7 @@ import {
   ChevronRight,
   ExternalLink,
   Github,
+  Send,
 } from 'lucide-react'
 import {
   Dialog,
@@ -116,6 +117,8 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
   const [processingStep, setProcessingStep] = React.useState(0)
   const [templates, setTemplates] = React.useState<Template[]>([])
   const [loadingTemplates, setLoadingTemplates] = React.useState(false)
+  const [answerText, setAnswerText] = React.useState('')
+  const [isAnswering, setIsAnswering] = React.useState(false)
 
   const processingSteps = [
     'Analyzuji úkol...',
@@ -163,11 +166,66 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
     })
     setResult(null)
     setProcessingStep(0)
+    setAnswerText('')
+    setIsAnswering(false)
   }
 
   const handleClose = () => {
     onOpenChange(false)
     setTimeout(resetDialog, 300) // Reset after animation
+  }
+
+  // Handle answering agent's question
+  const handleAnswer = async () => {
+    if (!answerText.trim()) return
+
+    setIsAnswering(true)
+    setStep('processing')
+    setProcessingStep(0)
+
+    const stepInterval = setInterval(() => {
+      setProcessingStep((prev) => Math.min(prev + 1, processingSteps.length - 1))
+    }, 1500)
+
+    try {
+      const response = await fetch('/api/agents/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskType: formData.type,
+          title: formData.title,
+          description: `${formData.description}\n\nDodatečné informace od uživatele:\n${answerText}`,
+          clientName: formData.clientName,
+          priority: formData.priority,
+        }),
+      })
+
+      clearInterval(stepInterval)
+
+      const data = await response.json()
+
+      setResult({
+        success: data.success,
+        status: data.status || (data.success ? 'completed' : 'error'),
+        output: data.output,
+        question: data.question,
+        feedback: data.feedback,
+      })
+
+      setStep('result')
+      setAnswerText('')
+      onSubmit?.(formData, data)
+    } catch (error) {
+      clearInterval(stepInterval)
+      setResult({
+        success: false,
+        status: 'error',
+        output: error instanceof Error ? error.message : 'Neznámá chyba',
+      })
+      setStep('result')
+    } finally {
+      setIsAnswering(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -534,15 +592,40 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
             <div className="space-y-4">
               {/* Question from agent */}
               {result.status === 'needs_input' && result.question && (
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-amber-500/20 p-2">
-                      <AlertCircle className="h-4 w-4 text-amber-400" />
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-lg bg-amber-500/20 p-2">
+                        <AlertCircle className="h-4 w-4 text-amber-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-amber-300">Agent se ptá:</p>
+                        <p className="text-sm mt-1 whitespace-pre-wrap">{result.question}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-amber-300">Agent se ptá:</p>
-                      <p className="text-sm mt-1">{result.question}</p>
-                    </div>
+                  </div>
+
+                  {/* Answer input */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Vaše odpověď</label>
+                    <Textarea
+                      value={answerText}
+                      onChange={(e) => setAnswerText(e.target.value)}
+                      placeholder="Zadejte odpověď na otázku agenta..."
+                      className="min-h-[100px] bg-white/5 border-white/10"
+                    />
+                    <Button
+                      onClick={handleAnswer}
+                      disabled={!answerText.trim() || isAnswering}
+                      className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500"
+                    >
+                      {isAnswering ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                      Odpovědět a pokračovat
+                    </Button>
                   </div>
                 </div>
               )}
