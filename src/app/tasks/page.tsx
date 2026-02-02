@@ -35,9 +35,11 @@ interface Task {
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   queued: { label: 'Ve frontě', color: 'bg-slate-500/20 text-slate-400', icon: <Clock className="h-3 w-3" /> },
+  processing: { label: 'Zpracovává se', color: 'bg-violet-500/20 text-violet-400', icon: <RefreshCw className="h-3 w-3 animate-spin" /> },
   in_progress: { label: 'Probíhá', color: 'bg-blue-500/20 text-blue-400', icon: <Play className="h-3 w-3" /> },
   completed: { label: 'Dokončeno', color: 'bg-emerald-500/20 text-emerald-400', icon: <CheckCircle2 className="h-3 w-3" /> },
   needs_review: { label: 'Ke kontrole', color: 'bg-amber-500/20 text-amber-400', icon: <AlertCircle className="h-3 w-3" /> },
+  failed: { label: 'Selhalo', color: 'bg-red-500/20 text-red-400', icon: <AlertCircle className="h-3 w-3" /> },
 }
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -66,7 +68,7 @@ export default function TasksPage() {
         let filtered = data.tasks
         if (filter === 'active') {
           filtered = data.tasks.filter((t: Task) =>
-            ['queued', 'in_progress', 'needs_review'].includes(t.status)
+            ['queued', 'processing', 'in_progress', 'needs_review'].includes(t.status)
           )
         }
         setTasks(filtered)
@@ -93,9 +95,11 @@ export default function TasksPage() {
 
   const tasksByStatus = {
     queued: tasks.filter(t => t.status === 'queued').length,
+    processing: tasks.filter(t => t.status === 'processing').length,
     in_progress: tasks.filter(t => t.status === 'in_progress').length,
     needs_review: tasks.filter(t => t.status === 'needs_review').length,
     completed: tasks.filter(t => t.status === 'completed').length,
+    failed: tasks.filter(t => t.status === 'failed').length,
   }
 
   return (
@@ -120,23 +124,26 @@ export default function TasksPage() {
         />
         <main className="p-6 space-y-6">
           {/* Stats */}
-          <div className="grid grid-cols-4 gap-4">
-            {Object.entries(statusConfig).map(([key, config]) => (
-              <button
-                key={key}
-                onClick={() => setFilter(key)}
-                className={cn(
-                  'rounded-xl border border-white/10 bg-white/5 p-4 text-left transition-all hover:bg-white/10',
-                  filter === key && 'ring-2 ring-primary'
-                )}
-              >
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  {config.icon}
-                  <span className="text-sm">{config.label}</span>
-                </div>
-                <p className="text-2xl font-bold">{tasksByStatus[key as keyof typeof tasksByStatus]}</p>
-              </button>
-            ))}
+          <div className="grid grid-cols-5 gap-4">
+            {(['processing', 'queued', 'in_progress', 'needs_review', 'completed'] as const).map((key) => {
+              const config = statusConfig[key]
+              return (
+                <button
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  className={cn(
+                    'rounded-xl border border-white/10 bg-white/5 p-4 text-left transition-all hover:bg-white/10',
+                    filter === key && 'ring-2 ring-primary'
+                  )}
+                >
+                  <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                    {config.icon}
+                    <span className="text-sm">{config.label}</span>
+                  </div>
+                  <p className="text-2xl font-bold">{tasksByStatus[key]}</p>
+                </button>
+              )
+            })}
           </div>
 
           {/* Filters */}
