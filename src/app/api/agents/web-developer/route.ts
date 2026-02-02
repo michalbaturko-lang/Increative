@@ -261,9 +261,35 @@ async function deployToVercel(projectName: string, repoUrl: string): Promise<str
 }
 
 export async function POST(request: NextRequest) {
+  const supabase = createServerClient()
+  let taskId: string | null = null
+
   try {
     const body = await request.json()
     const { title, description, clientName, existingUrl, priority = 'medium' } = body
+
+    // STEP 0: Save task IMMEDIATELY with 'processing' status
+    try {
+      const { data: newTask, error } = await supabase.from('tasks').insert({
+        type: 'web_development',
+        title,
+        description,
+        status: 'processing',
+        priority,
+        client_name: clientName || null,
+        agent_type: 'web_developer',
+        output: 'Generuji web...',
+        metadata: { existingUrl },
+      }).select('id').single()
+
+      if (error) {
+        console.error('Failed to create task:', error)
+      } else {
+        taskId = newTask.id
+      }
+    } catch (dbError) {
+      console.error('Failed to save task to database:', dbError)
+    }
 
     // Step 1: Generate website code
     const project = await generateWebsite(description, existingUrl)
@@ -316,28 +342,26 @@ ${Object.keys(project.files).map(f => `- \`${f}\``).join('\n')}
 2. Připojte vlastní doménu
 3. Nastavte analytics a monitoring`
 
-    // Save to database
-    const supabase = createServerClient()
-    await supabase.from('tasks').insert({
-      type: 'web_development',
-      title,
-      description,
-      status: vercelUrl ? 'completed' : 'needs_review',
-      priority,
-      client_name: clientName || null,
-      agent_type: 'web_developer',
-      output,
-      metadata: {
-        projectName: project.projectName,
-        githubUrl,
-        vercelUrl,
-        files: Object.keys(project.files),
-      },
-    })
+    const finalStatus = vercelUrl ? 'completed' : 'needs_review'
+
+    // STEP 4: Update task with result
+    if (taskId) {
+      await supabase.from('tasks').update({
+        status: finalStatus,
+        output,
+        metadata: {
+          projectName: project.projectName,
+          githubUrl,
+          vercelUrl,
+          files: Object.keys(project.files),
+        },
+      }).eq('id', taskId)
+    }
 
     return NextResponse.json({
       success: true,
-      status: vercelUrl ? 'completed' : 'needs_review',
+      status: finalStatus,
+      taskId,
       projectName: project.projectName,
       githubUrl,
       vercelUrl,
@@ -346,9 +370,19 @@ ${Object.keys(project.files).map(f => `- \`${f}\``).join('\n')}
     })
   } catch (error) {
     console.error('Web Developer API Error:', error)
+
+    // Update task as failed if we have taskId
+    if (taskId) {
+      await supabase.from('tasks').update({
+        status: 'failed',
+        output: `Chyba: ${error instanceof Error ? error.message : 'Neznámá chyba'}`,
+      }).eq('id', taskId)
+    }
+
     return NextResponse.json(
       {
         success: false,
+        taskId,
         error: error instanceof Error ? error.message : 'Neznámá chyba',
       },
       { status: 500 }
