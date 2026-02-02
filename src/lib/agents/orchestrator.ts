@@ -186,6 +186,7 @@ export class AgentOrchestrator {
       ads_campaign: ['ads_management', 'data_analysis'],
       social_media: ['social_media', 'content_writing'],
       email_marketing: ['content_writing', 'data_analysis'],
+      web_development: ['web_development', 'design'],
       mvp_creation: ['web_development', 'design'],
       client_analysis: ['client_research', 'data_analysis'],
       strategy_creation: ['strategy', 'data_analysis'],
