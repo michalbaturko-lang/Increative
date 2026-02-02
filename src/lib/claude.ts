@@ -216,8 +216,8 @@ VYLEPŠENÝ VÝSTUP: (pokud máš konkrétní vylepšení)`,
       : ''
 
     const approved = reviewText.toLowerCase().includes('schváleno: ano')
-    const feedbackMatch = reviewText.match(/FEEDBACK:\s*(.+?)(?=VYLEPŠENÝ|$)/s)
-    const improvedMatch = reviewText.match(/VYLEPŠENÝ VÝSTUP:\s*(.+)/s)
+    const feedbackMatch = reviewText.match(/FEEDBACK:\s*([\s\S]+?)(?=VYLEPŠENÝ|$)/)
+    const improvedMatch = reviewText.match(/VYLEPŠENÝ VÝSTUP:\s*([\s\S]+)/)
 
     return {
       approved,
