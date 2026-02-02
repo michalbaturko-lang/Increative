@@ -335,7 +335,7 @@ export class AgentOrchestrator {
       createdByAgentId: task.assignedAgentId!,
       approvedByHuman: false,
       timesUsed: 0,
-      successRate: null,
+      successRate: 0,
       lastUsedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
