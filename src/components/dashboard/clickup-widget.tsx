@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Users,
   Folder,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { cn } from '@/lib/utils'
@@ -24,52 +25,43 @@ interface ClickUpTask {
   url: string
   list: { id: string; name: string }
   folder: { id: string; name: string }
-  space: { id: string }
 }
 
-interface ClickUpWorkspace {
+interface ClickUpFolder {
   id: string
   name: string
+  spaceId: string
+  taskCount?: number
 }
 
-interface ClientGroup {
-  name: string
-  id: string
-  tasks: ClickUpTask[]
-  summary: {
-    total: number
-    open: number
-    inProgress: number
-    done: number
-  }
-}
-
-interface ClickUpData {
+interface ClickUpStructure {
   success: boolean
-  workspaces: ClickUpWorkspace[]
-  tasks: ClickUpTask[]
+  workspaces: { id: string; name: string }[]
+  spaces: { id: string; name: string; workspaceId: string }[]
+  folders: ClickUpFolder[]
   summary: {
-    totalTasks: number
-    byStatus: Record<string, number>
-    byPriority: Record<string, number>
+    totalClients: number
+    totalWorkspaces: number
   }
   error?: string
 }
 
 export function ClickUpWidget() {
-  const [data, setData] = React.useState<ClickUpData | null>(null)
+  const [structure, setStructure] = React.useState<ClickUpStructure | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [expandedClient, setExpandedClient] = React.useState<string | null>(null)
+  const [clientTasks, setClientTasks] = React.useState<Record<string, ClickUpTask[]>>({})
+  const [loadingTasks, setLoadingTasks] = React.useState<string | null>(null)
 
-  const fetchData = React.useCallback(async () => {
+  const fetchStructure = React.useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/clickup?action=summary')
+      const response = await fetch('/api/clickup?action=structure')
       const result = await response.json()
       if (result.success) {
-        setData(result)
+        setStructure(result)
       } else {
         setError(result.error || 'Nepodařilo se načíst data z ClickUp')
       }
@@ -80,72 +72,34 @@ export function ClickUpWidget() {
     }
   }, [])
 
+  const fetchClientTasks = React.useCallback(async (folderId: string) => {
+    if (clientTasks[folderId]) return // Already loaded
+
+    setLoadingTasks(folderId)
+    try {
+      const response = await fetch(`/api/clickup?action=folder-tasks&folderId=${folderId}`)
+      const result = await response.json()
+      if (result.success) {
+        setClientTasks(prev => ({ ...prev, [folderId]: result.tasks }))
+      }
+    } catch (err) {
+      console.error('Failed to fetch tasks:', err)
+    } finally {
+      setLoadingTasks(null)
+    }
+  }, [clientTasks])
+
   React.useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    fetchStructure()
+  }, [fetchStructure])
 
-  // Group tasks by folder (assuming folders = clients)
-  const clientGroups = React.useMemo(() => {
-    if (!data?.tasks) return []
-
-    const groups: Record<string, ClientGroup> = {}
-
-    for (const task of data.tasks) {
-      // Use folder name as client, or list name if no folder
-      const clientName = task.folder?.name || task.list?.name || 'Nezařazené'
-      const clientId = task.folder?.id || task.list?.id || 'unknown'
-
-      if (!groups[clientId]) {
-        groups[clientId] = {
-          name: clientName,
-          id: clientId,
-          tasks: [],
-          summary: { total: 0, open: 0, inProgress: 0, done: 0 },
-        }
-      }
-
-      groups[clientId].tasks.push(task)
-      groups[clientId].summary.total++
-
-      const status = task.status?.status?.toLowerCase() || ''
-      if (status.includes('done') || status.includes('complete') || status.includes('closed')) {
-        groups[clientId].summary.done++
-      } else if (status.includes('progress') || status.includes('review') || status.includes('doing')) {
-        groups[clientId].summary.inProgress++
-      } else {
-        groups[clientId].summary.open++
-      }
+  const handleClientClick = (folderId: string) => {
+    if (expandedClient === folderId) {
+      setExpandedClient(null)
+    } else {
+      setExpandedClient(folderId)
+      fetchClientTasks(folderId)
     }
-
-    return Object.values(groups).sort((a, b) => b.summary.total - a.summary.total)
-  }, [data])
-
-  // Generate AI-like summary
-  const generateSummary = (clients: ClientGroup[]): string => {
-    if (clients.length === 0) return 'Žádné aktivní projekty.'
-
-    const totalTasks = clients.reduce((sum, c) => sum + c.summary.total, 0)
-    const totalOpen = clients.reduce((sum, c) => sum + c.summary.open, 0)
-    const totalInProgress = clients.reduce((sum, c) => sum + c.summary.inProgress, 0)
-
-    const activeClients = clients.filter(c => c.summary.open + c.summary.inProgress > 0)
-
-    let summary = `Celkem ${totalTasks} úkolů pro ${clients.length} klientů. `
-
-    if (totalInProgress > 0) {
-      summary += `${totalInProgress} úkolů právě probíhá. `
-    }
-
-    if (totalOpen > 0) {
-      summary += `${totalOpen} úkolů čeká na zpracování. `
-    }
-
-    if (activeClients.length > 0) {
-      const topClients = activeClients.slice(0, 3).map(c => c.name).join(', ')
-      summary += `Aktivní klienti: ${topClients}.`
-    }
-
-    return summary
   }
 
   const getStatusColor = (status: string) => {
@@ -166,11 +120,20 @@ export function ClickUpWidget() {
     return 'text-muted-foreground'
   }
 
+  // Generate summary
+  const generateSummary = (): string => {
+    if (!structure || structure.folders.length === 0) return 'Žádní klienti v ClickUp.'
+
+    const totalTasks = structure.folders.reduce((sum, f) => sum + (f.taskCount || 0), 0)
+    return `${structure.folders.length} klientů v ClickUp, celkem ${totalTasks} úkolů.`
+  }
+
   if (loading) {
     return (
       <div className="rounded-xl border border-white/10 bg-white/5 p-6">
-        <div className="flex items-center justify-center py-8">
-          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="flex items-center justify-center gap-3 py-8">
+          <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Načítám ClickUp...</span>
         </div>
       </div>
     )
@@ -189,7 +152,7 @@ export function ClickUpWidget() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={fetchData}
+          onClick={fetchStructure}
           className="mt-4 gap-2"
         >
           <RefreshCw className="h-4 w-4" />
@@ -198,6 +161,8 @@ export function ClickUpWidget() {
       </div>
     )
   }
+
+  const folders = structure?.folders || []
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-4">
@@ -210,114 +175,103 @@ export function ClickUpWidget() {
           <div>
             <h3 className="font-semibold">ClickUp</h3>
             <p className="text-sm text-muted-foreground">
-              {data?.summary?.totalTasks || 0} úkolů
+              {structure?.summary?.totalClients || 0} klientů
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={fetchData} className="gap-2">
+        <Button variant="ghost" size="sm" onClick={fetchStructure} className="gap-2">
           <RefreshCw className="h-4 w-4" />
         </Button>
       </div>
 
       {/* Summary */}
       <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-        <p className="text-sm">{generateSummary(clientGroups)}</p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-center">
-          <p className="text-2xl font-bold text-emerald-400">
-            {data?.summary?.byStatus?.['complete'] || data?.summary?.byStatus?.['done'] || 0}
-          </p>
-          <p className="text-xs text-muted-foreground">Hotovo</p>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-center">
-          <p className="text-2xl font-bold text-blue-400">
-            {clientGroups.reduce((sum, c) => sum + c.summary.inProgress, 0)}
-          </p>
-          <p className="text-xs text-muted-foreground">Probíhá</p>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-center">
-          <p className="text-2xl font-bold text-amber-400">
-            {clientGroups.reduce((sum, c) => sum + c.summary.open, 0)}
-          </p>
-          <p className="text-xs text-muted-foreground">Čeká</p>
-        </div>
+        <p className="text-sm">{generateSummary()}</p>
       </div>
 
       {/* Clients List */}
       <div className="space-y-2">
         <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
           <Users className="h-4 w-4" />
-          Klienti ({clientGroups.length})
+          Klienti ({folders.length})
         </h4>
 
         <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-          {clientGroups.map((client) => (
+          {folders.map((folder) => (
             <div
-              key={client.id}
+              key={folder.id}
               className="rounded-lg border border-white/10 bg-white/5 overflow-hidden"
             >
               {/* Client Header */}
               <button
-                onClick={() => setExpandedClient(expandedClient === client.id ? null : client.id)}
+                onClick={() => handleClientClick(folder.id)}
                 className="w-full p-3 flex items-center justify-between hover:bg-white/5 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Folder className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">{client.name}</span>
+                  <span className="font-medium">{folder.name}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <span className="text-emerald-400">{client.summary.done}</span>
-                    <span className="text-muted-foreground">/</span>
-                    <span className="text-blue-400">{client.summary.inProgress}</span>
-                    <span className="text-muted-foreground">/</span>
-                    <span className="text-amber-400">{client.summary.open}</span>
-                  </div>
+                  {folder.taskCount !== undefined && (
+                    <span className="text-xs text-muted-foreground">
+                      {folder.taskCount} úkolů
+                    </span>
+                  )}
                   <ChevronRight
                     className={cn(
                       'h-4 w-4 text-muted-foreground transition-transform',
-                      expandedClient === client.id && 'rotate-90'
+                      expandedClient === folder.id && 'rotate-90'
                     )}
                   />
                 </div>
               </button>
 
               {/* Client Tasks */}
-              {expandedClient === client.id && (
+              {expandedClient === folder.id && (
                 <div className="border-t border-white/10 p-2 space-y-1 bg-black/20">
-                  {client.tasks.slice(0, 10).map((task) => (
-                    <a
-                      key={task.id}
-                      href={task.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-2 rounded-md hover:bg-white/5 transition-colors group"
-                    >
-                      <div
-                        className={cn('h-2 w-2 rounded-full', getStatusColor(task.status?.status || ''))}
-                      />
-                      <span className="flex-1 text-sm truncate">{task.name}</span>
-                      {task.priority && (
-                        <span className={cn('text-xs', getPriorityColor(task.priority.priority))}>
-                          {task.priority.priority}
-                        </span>
-                      )}
-                      {task.due_date && (
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {new Date(parseInt(task.due_date)).toLocaleDateString('cs-CZ')}
-                        </span>
-                      )}
-                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </a>
-                  ))}
-                  {client.tasks.length > 10 && (
-                    <p className="text-xs text-muted-foreground text-center py-2">
-                      +{client.tasks.length - 10} dalších úkolů
+                  {loadingTasks === folder.id ? (
+                    <div className="flex items-center justify-center gap-2 py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Načítám úkoly...</span>
+                    </div>
+                  ) : clientTasks[folder.id]?.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Žádné aktivní úkoly
                     </p>
+                  ) : (
+                    <>
+                      {clientTasks[folder.id]?.slice(0, 15).map((task) => (
+                        <a
+                          key={task.id}
+                          href={task.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 p-2 rounded-md hover:bg-white/5 transition-colors group"
+                        >
+                          <div
+                            className={cn('h-2 w-2 rounded-full flex-shrink-0', getStatusColor(task.status?.status || ''))}
+                          />
+                          <span className="flex-1 text-sm truncate">{task.name}</span>
+                          {task.priority && (
+                            <span className={cn('text-xs flex-shrink-0', getPriorityColor(task.priority.priority))}>
+                              {task.priority.priority}
+                            </span>
+                          )}
+                          {task.due_date && (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0">
+                              <Clock className="h-3 w-3" />
+                              {new Date(parseInt(task.due_date)).toLocaleDateString('cs-CZ')}
+                            </span>
+                          )}
+                          <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                        </a>
+                      ))}
+                      {(clientTasks[folder.id]?.length || 0) > 15 && (
+                        <p className="text-xs text-muted-foreground text-center py-2">
+                          +{(clientTasks[folder.id]?.length || 0) - 15} dalších úkolů
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               )}

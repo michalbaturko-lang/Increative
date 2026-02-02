@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const action = searchParams.get('action') || 'summary'
+  const action = searchParams.get('action') || 'structure'
 
   try {
     switch (action) {
@@ -27,6 +27,15 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ success: false, error: 'workspaceId is required' }, { status: 400 })
         }
         const data = await client.getSpaces(workspaceId)
+        return NextResponse.json({ success: true, ...data })
+      }
+
+      case 'folders': {
+        const spaceId = searchParams.get('spaceId')
+        if (!spaceId) {
+          return NextResponse.json({ success: false, error: 'spaceId is required' }, { status: 400 })
+        }
+        const data = await client.getFolders(spaceId)
         return NextResponse.json({ success: true, ...data })
       }
 
@@ -48,12 +57,70 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, ...data })
       }
 
-      case 'all':
-      case 'summary':
+      case 'folder-tasks': {
+        // Get all tasks from all lists in a folder
+        const folderId = searchParams.get('folderId')
+        if (!folderId) {
+          return NextResponse.json({ success: false, error: 'folderId is required' }, { status: 400 })
+        }
+        const { lists } = await client.getFolderLists(folderId)
+        const allTasks: unknown[] = []
+        for (const list of lists) {
+          try {
+            const { tasks } = await client.getTasks(list.id, { archived: false })
+            allTasks.push(...tasks)
+          } catch (e) {
+            console.error(`Failed to get tasks from list ${list.id}:`, e)
+          }
+        }
+        return NextResponse.json({ success: true, tasks: allTasks })
+      }
+
+      case 'structure':
       default: {
-        // Get everything - tasks from all workspaces
-        const data = await client.getAllTasks()
-        return NextResponse.json({ success: true, ...data })
+        // Get only structure (workspaces, spaces, folders) - no tasks
+        const { teams: workspaces } = await client.getWorkspaces()
+        const structure: {
+          workspaces: typeof workspaces
+          spaces: { id: string; name: string; workspaceId: string }[]
+          folders: { id: string; name: string; spaceId: string; taskCount?: number }[]
+        } = {
+          workspaces,
+          spaces: [],
+          folders: [],
+        }
+
+        for (const workspace of workspaces) {
+          const { spaces } = await client.getSpaces(workspace.id)
+          for (const space of spaces) {
+            structure.spaces.push({
+              id: space.id,
+              name: space.name,
+              workspaceId: workspace.id,
+            })
+
+            const { folders } = await client.getFolders(space.id)
+            for (const folder of folders) {
+              // Calculate task count from lists if available
+              const taskCount = folder.lists?.reduce((sum, list) => sum + (list.task_count || 0), 0) || 0
+              structure.folders.push({
+                id: folder.id,
+                name: folder.name,
+                spaceId: space.id,
+                taskCount,
+              })
+            }
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          ...structure,
+          summary: {
+            totalClients: structure.folders.length,
+            totalWorkspaces: structure.workspaces.length,
+          }
+        })
       }
     }
   } catch (error) {
