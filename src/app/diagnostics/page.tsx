@@ -23,22 +23,21 @@ import { cn } from '@/lib/utils'
 
 interface AgentResult {
   agentType: string
+  title: string
   status: 'success' | 'error' | 'timeout'
+  output: string
   duration: number
   error?: string
 }
 
-interface DiagnosticsData {
+interface DiagnosticsResult {
   id: string
-  status: string
+  startedAt: string
+  completedAt: string
+  agentResults: AgentResult[]
+  supervisorEvaluation: string
+  overallStatus: 'healthy' | 'warning' | 'critical'
   output: string
-  created_at: string
-  metadata?: {
-    startedAt?: string
-    completedAt?: string
-    overallStatus?: 'healthy' | 'warning' | 'critical'
-    agentResults?: AgentResult[]
-  }
 }
 
 const agentIcons: Record<string, React.ReactNode> = {
@@ -61,68 +60,39 @@ const agentNames: Record<string, string> = {
 
 export default function DiagnosticsPage() {
   const [isRunning, setIsRunning] = React.useState(false)
-  const [lastDiagnostics, setLastDiagnostics] = React.useState<DiagnosticsData | null>(null)
-  const [loading, setLoading] = React.useState(true)
+  const [result, setResult] = React.useState<DiagnosticsResult | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
   const [currentStep, setCurrentStep] = React.useState('')
-
-  // Fetch last diagnostics on mount
-  React.useEffect(() => {
-    fetchLastDiagnostics()
-  }, [])
-
-  const fetchLastDiagnostics = async () => {
-    try {
-      const response = await fetch('/api/diagnostics')
-      const data = await response.json()
-      if (data.success && data.lastDiagnostics) {
-        setLastDiagnostics(data.lastDiagnostics)
-      }
-    } catch (error) {
-      console.error('Failed to fetch diagnostics:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [expandedAgent, setExpandedAgent] = React.useState<string | null>(null)
 
   const runDiagnostics = async () => {
     setIsRunning(true)
+    setError(null)
+    setResult(null)
     setCurrentStep('Spouštím diagnostiku...')
 
     try {
-      // Simulate progress updates
-      const steps = [
-        'Připravuji testovací úkoly...',
-        'Testuji Content Writer...',
-        'Testuji SEO Analyst...',
-        'Testuji Ads Specialist...',
-        'Testuji Social Media...',
-        'Testuji Email Marketing...',
-        'Testuji Analyst...',
-        'Supervisor hodnotí výstupy...',
-      ]
-
-      let stepIndex = 0
-      const stepInterval = setInterval(() => {
-        if (stepIndex < steps.length) {
-          setCurrentStep(steps[stepIndex])
-          stepIndex++
-        }
-      }, 3000)
-
       const response = await fetch('/api/diagnostics', {
         method: 'POST',
       })
 
-      clearInterval(stepInterval)
-
       const data = await response.json()
 
       if (data.success) {
-        // Refresh the last diagnostics
-        await fetchLastDiagnostics()
+        setResult({
+          id: data.id,
+          startedAt: data.startedAt,
+          completedAt: data.completedAt,
+          agentResults: data.agentResults,
+          supervisorEvaluation: data.supervisorEvaluation,
+          overallStatus: data.overallStatus,
+          output: data.output,
+        })
+      } else {
+        setError(data.error || 'Diagnostika selhala')
       }
-    } catch (error) {
-      console.error('Diagnostics failed:', error)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Neočekávaná chyba')
     } finally {
       setIsRunning(false)
       setCurrentStep('')
@@ -132,13 +102,13 @@ export default function DiagnosticsPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'healthy':
-        return <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+        return <CheckCircle2 className="h-6 w-6 text-emerald-400" />
       case 'warning':
-        return <AlertCircle className="h-5 w-5 text-amber-400" />
+        return <AlertCircle className="h-6 w-6 text-amber-400" />
       case 'critical':
-        return <XCircle className="h-5 w-5 text-red-400" />
+        return <XCircle className="h-6 w-6 text-red-400" />
       default:
-        return <Activity className="h-5 w-5 text-muted-foreground" />
+        return <Activity className="h-6 w-6 text-muted-foreground" />
     }
   }
 
@@ -155,179 +125,223 @@ export default function DiagnosticsPage() {
     }
   }
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'healthy':
+        return 'Systém je zdravý - všichni agenti fungují správně'
+      case 'warning':
+        return 'Systém má varování - některé problémy byly detekovány'
+      case 'critical':
+        return 'Kritické problémy - vyžaduje okamžitou pozornost'
+      default:
+        return 'Stav neznámý'
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header title="Diagnostika" subtitle="Testování a hodnocení všech agentů" />
 
       <main className="flex-1 p-6 space-y-6">
-        {/* Run Diagnostics Button */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Systémová diagnostika</h2>
-            <p className="text-sm text-muted-foreground">
-              Supervisor otestuje všechny agenty a zhodnotí kvalitu výstupů
-            </p>
-          </div>
-          <Button
-            onClick={runDiagnostics}
-            disabled={isRunning}
-            className="gap-2 bg-gradient-to-r from-primary to-violet-500"
-          >
-            {isRunning ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                Probíhá...
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4" />
-                Spustit diagnostiku
-              </>
-            )}
-          </Button>
-        </div>
-
-        {/* Running State */}
-        {isRunning && (
-          <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-6">
+        {/* Run Diagnostics Section */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="absolute inset-0 rounded-full bg-violet-500 blur-lg opacity-50 animate-pulse" />
-                <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-violet-500">
-                  <Brain className="h-6 w-6 text-white animate-pulse" />
-                </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-violet-500">
+                <Brain className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold">Diagnostika běží</h3>
-                <p className="text-sm text-muted-foreground">{currentStep}</p>
+                <h2 className="text-lg font-semibold">Systémová diagnostika</h2>
+                <p className="text-sm text-muted-foreground">
+                  Supervisor otestuje všechny agenty a zhodnotí kvalitu výstupů
+                </p>
               </div>
             </div>
+            <Button
+              onClick={runDiagnostics}
+              disabled={isRunning}
+              size="lg"
+              className="gap-2 bg-gradient-to-r from-primary to-violet-500"
+            >
+              {isRunning ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Probíhá diagnostika...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  Spustit diagnostiku
+                </>
+              )}
+            </Button>
+          </div>
 
-            {/* Progress dots */}
-            <div className="mt-4 flex items-center gap-1">
-              <div className="h-2 w-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="h-2 w-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="h-2 w-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          {/* Running State */}
+          {isRunning && (
+            <div className="mt-6 rounded-xl border border-violet-500/30 bg-violet-500/10 p-4">
+              <div className="flex items-center gap-3">
+                <Brain className="h-5 w-5 text-violet-400 animate-pulse" />
+                <span className="text-sm">Testuji agenty a hodnotím výstupy... Trvá to cca 30-60 sekund.</span>
+              </div>
+              <div className="mt-3 flex items-center gap-1">
+                <div className="h-2 w-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="h-2 w-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="h-2 w-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Error State */}
+        {error && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
+            <div className="flex items-center gap-3">
+              <XCircle className="h-6 w-6 text-red-400" />
+              <div>
+                <h3 className="font-semibold text-red-400">Chyba diagnostiky</h3>
+                <p className="text-sm text-red-300">{error}</p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Loading State */}
-        {loading && !isRunning && (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        )}
-
-        {/* Last Diagnostics Results */}
-        {!loading && lastDiagnostics && (
+        {/* Results */}
+        {result && (
           <div className="space-y-6">
             {/* Overall Status Card */}
-            <div
-              className={cn(
-                'rounded-xl border p-6',
-                getStatusColor(lastDiagnostics.metadata?.overallStatus || 'unknown')
-              )}
-            >
+            <div className={cn('rounded-xl border p-6', getStatusColor(result.overallStatus))}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  {getStatusIcon(lastDiagnostics.metadata?.overallStatus || 'unknown')}
+                  {getStatusIcon(result.overallStatus)}
                   <div>
-                    <h3 className="font-semibold">
-                      {lastDiagnostics.metadata?.overallStatus === 'healthy' && 'Systém je zdravý'}
-                      {lastDiagnostics.metadata?.overallStatus === 'warning' && 'Systém má varování'}
-                      {lastDiagnostics.metadata?.overallStatus === 'critical' && 'Kritické problémy'}
-                      {!lastDiagnostics.metadata?.overallStatus && 'Stav neznámý'}
-                    </h3>
-                    <p className="text-sm opacity-80">
-                      Poslední test: {new Date(lastDiagnostics.created_at).toLocaleString('cs-CZ')}
+                    <h3 className="text-xl font-bold">{getStatusText(result.overallStatus)}</h3>
+                    <p className="text-sm opacity-80 mt-1">
+                      Dokončeno: {new Date(result.completedAt).toLocaleString('cs-CZ')}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Clock className="h-4 w-4" />
-                  <span>
-                    {lastDiagnostics.metadata?.completedAt &&
-                      lastDiagnostics.metadata?.startedAt &&
-                      `${Math.round(
-                        (new Date(lastDiagnostics.metadata.completedAt).getTime() -
-                          new Date(lastDiagnostics.metadata.startedAt).getTime()) /
-                          1000
-                      )}s`}
-                  </span>
+                <div className="text-right">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="h-4 w-4" />
+                    <span>
+                      {Math.round(
+                        (new Date(result.completedAt).getTime() - new Date(result.startedAt).getTime()) / 1000
+                      )}s celkem
+                    </span>
+                  </div>
+                  <p className="text-sm opacity-70 mt-1">
+                    {result.agentResults.filter(r => r.status === 'success').length}/{result.agentResults.length} agentů OK
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Agent Results Grid */}
-            {lastDiagnostics.metadata?.agentResults && (
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Výsledky testů agentů</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {lastDiagnostics.metadata.agentResults.map((result) => (
-                    <div
-                      key={result.agentType}
-                      className={cn(
-                        'rounded-xl border p-4',
-                        result.status === 'success'
-                          ? 'border-emerald-500/30 bg-emerald-500/10'
-                          : 'border-red-500/30 bg-red-500/10'
+            {/* Agent Results */}
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Výsledky testů agentů</h3>
+              <div className="space-y-3">
+                {result.agentResults.map((agentResult) => (
+                  <div
+                    key={agentResult.agentType}
+                    className={cn(
+                      'rounded-xl border overflow-hidden transition-all',
+                      agentResult.status === 'success'
+                        ? 'border-emerald-500/30 bg-emerald-500/5'
+                        : 'border-red-500/30 bg-red-500/5'
+                    )}
+                  >
+                    {/* Agent Header - Clickable */}
+                    <button
+                      onClick={() => setExpandedAgent(
+                        expandedAgent === agentResult.agentType ? null : agentResult.agentType
                       )}
+                      className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <div
                           className={cn(
                             'flex h-10 w-10 items-center justify-center rounded-lg',
-                            result.status === 'success' ? 'bg-emerald-500/20' : 'bg-red-500/20'
+                            agentResult.status === 'success' ? 'bg-emerald-500/20' : 'bg-red-500/20'
                           )}
                         >
-                          {agentIcons[result.agentType] || <Activity className="h-4 w-4" />}
+                          {agentIcons[agentResult.agentType] || <Activity className="h-4 w-4" />}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">
-                            {agentNames[result.agentType] || result.agentType}
+                        <div className="text-left">
+                          <p className="font-medium">
+                            {agentNames[agentResult.agentType] || agentResult.agentType}
                           </p>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            {result.status === 'success' ? (
+                            {agentResult.status === 'success' ? (
                               <CheckCircle2 className="h-3 w-3 text-emerald-400" />
                             ) : (
                               <XCircle className="h-3 w-3 text-red-400" />
                             )}
-                            <span>{result.duration}ms</span>
+                            <span>{agentResult.status === 'success' ? 'OK' : 'Chyba'}</span>
+                            <span>•</span>
+                            <span>{agentResult.duration}ms</span>
                           </div>
                         </div>
                       </div>
-                      {result.error && (
-                        <p className="mt-2 text-xs text-red-400 truncate">{result.error}</p>
-                      )}
-                    </div>
-                  ))}
+                      <div className="text-muted-foreground">
+                        {expandedAgent === agentResult.agentType ? '▼' : '▶'}
+                      </div>
+                    </button>
+
+                    {/* Agent Output - Expandable */}
+                    {expandedAgent === agentResult.agentType && (
+                      <div className="border-t border-white/10 p-4 bg-black/20">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">VÝSTUP AGENTA:</p>
+                        {agentResult.status === 'success' ? (
+                          <pre className="text-sm whitespace-pre-wrap font-sans">{agentResult.output}</pre>
+                        ) : (
+                          <p className="text-sm text-red-400">{agentResult.error || 'Neznámá chyba'}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Supervisor Evaluation */}
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Hodnocení od Supervisora</h3>
+              <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-6">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/20">
+                    <Brain className="h-5 w-5 text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-violet-300">Supervisor</p>
+                    <p className="text-sm text-muted-foreground">Senior marketingový konzultant</p>
+                  </div>
+                </div>
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <pre className="whitespace-pre-wrap font-sans text-sm">{result.supervisorEvaluation}</pre>
                 </div>
               </div>
-            )}
+            </div>
 
-            {/* Full Output */}
+            {/* Full Report */}
             <div>
               <h3 className="text-lg font-semibold mb-4">Kompletní report</h3>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-6 max-h-[600px] overflow-y-auto">
-                <pre className="text-sm whitespace-pre-wrap font-sans">{lastDiagnostics.output}</pre>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-6 max-h-[500px] overflow-y-auto">
+                <pre className="text-sm whitespace-pre-wrap font-sans">{result.output}</pre>
               </div>
             </div>
           </div>
         )}
 
-        {/* No Diagnostics Yet */}
-        {!loading && !lastDiagnostics && !isRunning && (
+        {/* No Results Yet */}
+        {!isRunning && !result && !error && (
           <div className="rounded-xl border border-dashed border-white/20 p-12 text-center">
             <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Žádná diagnostika</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Spusť diagnostiku pro otestování všech agentů
+            <h3 className="text-lg font-semibold mb-2">Připraveno k diagnostice</h3>
+            <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+              Klikni na tlačítko výše pro spuštění kompletní diagnostiky.
+              Supervisor otestuje všechny agenty a poskytne detailní hodnocení jejich výstupů.
             </p>
-            <Button onClick={runDiagnostics} className="gap-2">
-              <Play className="h-4 w-4" />
-              Spustit první diagnostiku
-            </Button>
           </div>
         )}
       </main>
