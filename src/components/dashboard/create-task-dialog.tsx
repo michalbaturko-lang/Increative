@@ -241,9 +241,19 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
 
       const data = await response.json()
 
+      if (!data.success) {
+        setResult({
+          success: false,
+          status: 'error',
+          output: data.error || 'Neznámá chyba při zpracování úkolu',
+        })
+        setStep('result')
+        return
+      }
+
       setResult({
         success: data.success,
-        status: data.status || (data.success ? 'completed' : 'error'),
+        status: data.status || 'completed',
         output: data.output,
         question: data.question,
         feedback: data.feedback,
@@ -260,7 +270,7 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
       setResult({
         success: false,
         status: 'error',
-        output: error instanceof Error ? error.message : 'Neznámá chyba',
+        output: error instanceof Error ? error.message : 'Síťová chyba - zkontrolujte připojení',
       })
       setStep('result')
     }
