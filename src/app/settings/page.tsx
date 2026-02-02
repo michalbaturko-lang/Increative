@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { Sidebar, Header } from '@/components/layout'
 import { Button, Input, Badge } from '@/components/ui'
+import { CreateTaskDialog } from '@/components/dashboard'
 import {
   Settings,
   User,
@@ -25,6 +26,7 @@ export default function SettingsPage() {
   const { user, refreshProfile } = useAuth()
   const [saving, setSaving] = React.useState(false)
   const [saved, setSaved] = React.useState(false)
+  const [createTaskOpen, setCreateTaskOpen] = React.useState(false)
   const [profile, setProfile] = React.useState({
     full_name: '',
     email: '',
@@ -94,6 +96,11 @@ export default function SettingsPage() {
 
   return (
     <div className="relative min-h-screen bg-background">
+      <CreateTaskDialog
+        open={createTaskOpen}
+        onOpenChange={setCreateTaskOpen}
+      />
+
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/20 blur-[100px]" />
         <div className="absolute top-1/2 -left-40 h-80 w-80 rounded-full bg-violet-500/20 blur-[100px]" />
@@ -101,7 +108,7 @@ export default function SettingsPage() {
 
       <Sidebar />
       <div className="relative pl-64">
-        <Header title="Nastavení" subtitle="Správa účtu a preferencí" />
+        <Header title="Nastavení" subtitle="Správa účtu a preferencí" onNewTask={() => setCreateTaskOpen(true)} />
         <main className="p-6">
           <div className="flex gap-6">
             {/* Sidebar Navigation */}

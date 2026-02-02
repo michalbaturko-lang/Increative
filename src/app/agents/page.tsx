@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { Sidebar, Header } from '@/components/layout'
 import { Badge, Button } from '@/components/ui'
+import { CreateTaskDialog } from '@/components/dashboard'
 import {
   Brain,
   FileText,
@@ -110,9 +111,15 @@ const agents: AgentInfo[] = [
 
 export default function AgentsPage() {
   const [selectedAgent, setSelectedAgent] = React.useState<AgentInfo | null>(null)
+  const [createTaskOpen, setCreateTaskOpen] = React.useState(false)
 
   return (
     <div className="relative min-h-screen bg-background">
+      <CreateTaskDialog
+        open={createTaskOpen}
+        onOpenChange={setCreateTaskOpen}
+      />
+
       {/* Background gradient orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/20 blur-[100px]" />
@@ -121,7 +128,7 @@ export default function AgentsPage() {
 
       <Sidebar />
       <div className="relative pl-64">
-        <Header title="Agenti" subtitle="AI agenti a jejich schopnosti" />
+        <Header title="Agenti" subtitle="AI agenti a jejich schopnosti" onNewTask={() => setCreateTaskOpen(true)} />
         <main className="p-6 space-y-6">
           {/* Stats Overview */}
           <div className="grid grid-cols-4 gap-4">

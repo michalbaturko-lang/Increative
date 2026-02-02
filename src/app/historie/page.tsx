@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { Sidebar, Header } from '@/components/layout'
 import { Badge, Button } from '@/components/ui'
+import { CreateTaskDialog } from '@/components/dashboard'
 import {
   FileText,
   Search,
@@ -96,6 +97,7 @@ export default function HistoriePage() {
   const [loading, setLoading] = React.useState(true)
   const [expandedId, setExpandedId] = React.useState<string | null>(null)
   const [filter, setFilter] = React.useState<string>('all')
+  const [createTaskOpen, setCreateTaskOpen] = React.useState(false)
 
   const fetchTasks = React.useCallback(async () => {
     setLoading(true)
@@ -137,6 +139,12 @@ export default function HistoriePage() {
 
   return (
     <div className="relative min-h-screen bg-background">
+      <CreateTaskDialog
+        open={createTaskOpen}
+        onOpenChange={setCreateTaskOpen}
+        onSubmit={() => fetchTasks()}
+      />
+
       {/* Background gradient orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/20 blur-[100px]" />
@@ -146,7 +154,7 @@ export default function HistoriePage() {
 
       <Sidebar />
       <div className="relative pl-64">
-        <Header title="Historie" subtitle="Přehled všech dokončených úkolů" />
+        <Header title="Historie" subtitle="Přehled všech dokončených úkolů" onNewTask={() => setCreateTaskOpen(true)} />
         <main className="p-6 space-y-6">
           {/* Filters */}
           <div className="flex items-center justify-between">
