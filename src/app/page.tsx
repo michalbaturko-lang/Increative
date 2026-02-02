@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { Sidebar, Header } from '@/components/layout'
-import { AgentCard, TaskQueue, StatsCards, PendingQuestions, CreateTaskDialog } from '@/components/dashboard'
+import { AgentCard, TaskQueue, StatsCards, PendingQuestions, CreateTaskDialog, ClickUpWidget } from '@/components/dashboard'
 import { useAuth } from '@/components/providers/auth-provider'
 import type { Agent, Task, DashboardStats } from '@/types'
 
@@ -220,6 +220,9 @@ export default function DashboardPage() {
 
           {/* Stats */}
           <StatsCards stats={stats} />
+
+          {/* ClickUp Integration */}
+          <ClickUpWidget />
 
           {/* Pending Questions - prominently displayed */}
           {pendingQuestions.length > 0 && (
