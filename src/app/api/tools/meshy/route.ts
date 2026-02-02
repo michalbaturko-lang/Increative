@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { action, prompt, imageUrls, model, negativePrompt, taskId, taskType } = body
+    const { action, prompt, imageUrls, imageUrl, model, negativePrompt, taskId, taskType, enablePbr, topology, targetPolycount } = body
 
     switch (action) {
       case 'text-to-image': {
@@ -98,21 +98,79 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, error: 'imageUrls je povinný' }, { status: 400 })
         }
 
-        const imageUrl = await client.transformImage(imageUrls, prompt, {
+        const transformedUrl = await client.transformImage(imageUrls, prompt, {
           model: model || 'nano-banana',
           negativePrompt,
         })
 
         return NextResponse.json({
           success: true,
+          imageUrl: transformedUrl,
+        })
+      }
+
+      // ============================================
+      // IMAGE TO 3D
+      // ============================================
+
+      case 'image-to-3d': {
+        // Start 3D conversion (async)
+        if (!imageUrl) {
+          return NextResponse.json({ success: false, error: 'imageUrl je povinný' }, { status: 400 })
+        }
+
+        const result = await client.imageTo3D({
           imageUrl,
+          enablePbr: enablePbr ?? true,
+          topology: topology || 'triangle',
+          targetPolycount,
+        })
+
+        return NextResponse.json({
+          success: true,
+          taskId: result.taskId,
+          message: '3D task vytvořen. Použij action=3d-status pro kontrolu průběhu.',
+        })
+      }
+
+      case '3d-status': {
+        // Check 3D task status
+        if (!taskId) {
+          return NextResponse.json({ success: false, error: 'taskId je povinný' }, { status: 400 })
+        }
+
+        const status = await client.get3DTaskStatus(taskId)
+
+        return NextResponse.json({
+          success: true,
+          ...status,
+        })
+      }
+
+      case 'generate-3d': {
+        // Generate 3D and wait for result (synchronous - takes longer!)
+        if (!imageUrl) {
+          return NextResponse.json({ success: false, error: 'imageUrl je povinný' }, { status: 400 })
+        }
+
+        const result = await client.generate3DModel(imageUrl, {
+          enablePbr: enablePbr ?? true,
+          topology: topology || 'triangle',
+          targetPolycount,
+        })
+
+        return NextResponse.json({
+          success: true,
+          modelUrls: result.model_urls,
+          thumbnailUrl: result.thumbnail_url,
+          textureUrls: result.texture_urls,
         })
       }
 
       default:
         return NextResponse.json({
           success: false,
-          error: 'Neplatná akce. Použij: text-to-image, image-to-image, status, generate, transform',
+          error: 'Neplatná akce. Použij: text-to-image, image-to-image, status, generate, transform, image-to-3d, 3d-status, generate-3d',
         }, { status: 400 })
     }
   } catch (error) {
