@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { executeAgentTask, supervisorReview, AgentType } from '@/lib/claude'
+import { executeAgentTask, AgentType } from '@/lib/claude'
 import { createServerClient } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
@@ -30,31 +30,15 @@ export async function POST(request: NextRequest) {
       ? `Klient: ${clientName}\nPriorita: ${priority}`
       : `Priorita: ${priority}`
 
-    // Execute the task
+    // Execute the task with intelligent Agent <-> Supervisor loop
     const result = await executeAgentTask({
       agentType,
       task: `${title}\n\n${description}`,
       context,
     })
 
-    // If agent needs human input, return early (don't save yet)
-    if (result.needsHumanInput) {
-      return NextResponse.json({
-        success: true,
-        status: 'needs_input',
-        question: result.question,
-      })
-    }
-
-    // Have supervisor review the output
-    const review = await supervisorReview({
-      originalTask: `${title}\n\n${description}`,
-      agentOutput: result.output,
-      agentType,
-    })
-
-    const finalOutput = review.improvedOutput || result.output
-    const status = review.approved ? 'completed' : 'needs_review'
+    // Determine final status
+    const status = result.success ? 'completed' : 'failed'
 
     // Save task to Supabase
     try {
@@ -67,9 +51,13 @@ export async function POST(request: NextRequest) {
         priority,
         client_name: clientName || null,
         agent_type: agentType,
-        output: finalOutput,
-        feedback: review.feedback || null,
-        needs_review: !review.approved,
+        output: result.output,
+        feedback: result.supervisorFeedback || null,
+        needs_review: false,
+        metadata: {
+          iterations: result.iterations,
+          supervisorFeedback: result.supervisorFeedback,
+        },
       })
     } catch (dbError) {
       console.error('Failed to save task to database:', dbError)
@@ -79,9 +67,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: result.success,
       status,
-      output: finalOutput,
-      feedback: review.feedback,
-      approved: review.approved,
+      output: result.output,
+      iterations: result.iterations,
+      supervisorFeedback: result.supervisorFeedback,
+      // These are no longer used in new workflow, but keep for compatibility
+      needsHumanInput: false,
+      approved: true,
     })
   } catch (error) {
     console.error('API Error:', error)

@@ -60,6 +60,9 @@ interface TaskResult {
   output?: string
   question?: string
   feedback?: string
+  // New workflow info
+  iterations?: number
+  supervisorFeedback?: string
   // Web developer specific
   githubUrl?: string
   vercelUrl?: string
@@ -122,9 +125,9 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
 
   const processingSteps = [
     'Analyzuji úkol...',
-    'Vybírám vhodného agenta...',
-    'Agent pracuje...',
-    'Supervisor kontroluje výstup...',
+    'Agent pracuje autonomně...',
+    'Supervisor kontroluje kvalitu...',
+    'Finalizuji výstup...',
   ]
 
   // Fetch templates when dialog opens
@@ -274,6 +277,8 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
         output: data.output,
         question: data.question,
         feedback: data.feedback,
+        iterations: data.iterations,
+        supervisorFeedback: data.supervisorFeedback,
         githubUrl: data.githubUrl,
         vercelUrl: data.vercelUrl,
         projectName: data.projectName,
@@ -590,7 +595,30 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
             </DialogHeader>
 
             <div className="space-y-4">
-              {/* Question from agent */}
+              {/* Workflow info - iterations */}
+              {result.iterations && result.iterations > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <span>Dokončeno po {result.iterations} {result.iterations === 1 ? 'iteraci' : result.iterations < 5 ? 'iteracích' : 'iteracích'} s Supervisorem</span>
+                </div>
+              )}
+
+              {/* Supervisor feedback if any */}
+              {result.supervisorFeedback && (
+                <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-violet-500/20 p-2">
+                      <Brain className="h-4 w-4 text-violet-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-violet-300">Poznámka od Supervisora:</p>
+                      <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{result.supervisorFeedback}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Question from agent (legacy - shouldn't happen in new workflow) */}
               {result.status === 'needs_input' && result.question && (
                 <div className="space-y-4">
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
