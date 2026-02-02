@@ -10,6 +10,7 @@
 
 import type {
   Agent,
+  AgentCapability,
   Task,
   TaskStatus,
   KnowledgeEntry,
@@ -177,8 +178,8 @@ export class AgentOrchestrator {
   /**
    * Get required capabilities for a task type
    */
-  private getRequiredCapabilities(taskType: Task['type']): string[] {
-    const mapping: Record<Task['type'], string[]> = {
+  private getRequiredCapabilities(taskType: Task['type']): AgentCapability[] {
+    const mapping: Record<Task['type'], AgentCapability[]> = {
       content_creation: ['content_writing', 'social_media'],
       seo_audit: ['seo_analysis', 'data_analysis'],
       competitor_analysis: ['competitor_analysis', 'data_analysis'],
