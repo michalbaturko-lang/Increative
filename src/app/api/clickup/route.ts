@@ -76,6 +76,74 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, tasks: allTasks })
       }
 
+      case 'recent': {
+        // Get 30 most recent tasks across all folders (non-completed)
+        const limit = parseInt(searchParams.get('limit') || '30')
+        const { teams: workspaces } = await client.getWorkspaces()
+
+        interface RecentTask {
+          id: string
+          name: string
+          description?: string
+          status: { status: string; color: string }
+          priority: { priority: string; color: string } | null
+          assignees: { username: string; email: string }[]
+          due_date: string | null
+          date_created: string
+          date_updated: string
+          url: string
+          list: { id: string; name: string }
+          folder: { id: string; name: string }
+        }
+
+        const allTasks: RecentTask[] = []
+
+        for (const workspace of workspaces) {
+          const { spaces } = await client.getSpaces(workspace.id)
+          for (const space of spaces) {
+            const { folders } = await client.getFolders(space.id)
+            for (const folder of folders) {
+              const listsToFetch = folder.lists || []
+              if (listsToFetch.length === 0) {
+                try {
+                  const { lists } = await client.getFolderLists(folder.id)
+                  listsToFetch.push(...lists)
+                } catch {}
+              }
+
+              for (const list of listsToFetch) {
+                try {
+                  const { tasks } = await client.getTasks(list.id, { archived: false })
+                  // Filter out completed tasks and add to array
+                  for (const task of tasks) {
+                    const status = task.status?.status?.toLowerCase() || ''
+                    if (!status.includes('complete') && !status.includes('done') && !status.includes('closed')) {
+                      allTasks.push(task as RecentTask)
+                    }
+                  }
+                } catch {}
+              }
+            }
+          }
+        }
+
+        // Sort by date_created descending (newest first)
+        allTasks.sort((a, b) => {
+          const dateA = parseInt(a.date_created) || 0
+          const dateB = parseInt(b.date_created) || 0
+          return dateB - dateA
+        })
+
+        // Return top N
+        const recentTasks = allTasks.slice(0, limit)
+
+        return NextResponse.json({
+          success: true,
+          tasks: recentTasks,
+          total: allTasks.length,
+        })
+      }
+
       case 'structure':
       default: {
         // Get only structure (workspaces, spaces, folders) - no tasks
