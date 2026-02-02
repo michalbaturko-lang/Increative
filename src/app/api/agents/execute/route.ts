@@ -24,13 +24,39 @@ export async function POST(request: NextRequest) {
     }
 
     const agentType = agentTypeMap[taskType] || 'content_writer'
+    const supabase = createServerClient()
+
+    // STEP 1: Save task IMMEDIATELY with 'processing' status
+    let taskId: string | null = null
+    try {
+      const { data: newTask, error } = await supabase.from('tasks').insert({
+        type: taskType,
+        title,
+        description,
+        status: 'processing',
+        priority,
+        client_name: clientName || null,
+        agent_type: agentType,
+        output: null,
+        feedback: null,
+        needs_review: false,
+      }).select('id').single()
+
+      if (error) {
+        console.error('Failed to create task:', error)
+      } else {
+        taskId = newTask.id
+      }
+    } catch (dbError) {
+      console.error('Failed to save task to database:', dbError)
+    }
 
     // Build context
     const context = clientName
       ? `Klient: ${clientName}\nPriorita: ${priority}`
       : `Priorita: ${priority}`
 
-    // Execute the task with intelligent Agent <-> Supervisor loop
+    // STEP 2: Execute the task with intelligent Agent <-> Supervisor loop
     const result = await executeAgentTask({
       agentType,
       task: `${title}\n\n${description}`,
@@ -40,37 +66,30 @@ export async function POST(request: NextRequest) {
     // Determine final status
     const status = result.success ? 'completed' : 'failed'
 
-    // Save task to Supabase
-    try {
-      const supabase = createServerClient()
-      await supabase.from('tasks').insert({
-        type: taskType,
-        title,
-        description,
-        status,
-        priority,
-        client_name: clientName || null,
-        agent_type: agentType,
-        output: result.output,
-        feedback: result.supervisorFeedback || null,
-        needs_review: false,
-        metadata: {
-          iterations: result.iterations,
-          supervisorFeedback: result.supervisorFeedback,
-        },
-      })
-    } catch (dbError) {
-      console.error('Failed to save task to database:', dbError)
-      // Continue - don't fail the whole request if DB save fails
+    // STEP 3: Update task with result
+    if (taskId) {
+      try {
+        await supabase.from('tasks').update({
+          status,
+          output: result.output,
+          feedback: result.supervisorFeedback || null,
+          metadata: {
+            iterations: result.iterations,
+            supervisorFeedback: result.supervisorFeedback,
+          },
+        }).eq('id', taskId)
+      } catch (dbError) {
+        console.error('Failed to update task:', dbError)
+      }
     }
 
     return NextResponse.json({
       success: result.success,
       status,
+      taskId,
       output: result.output,
       iterations: result.iterations,
       supervisorFeedback: result.supervisorFeedback,
-      // These are no longer used in new workflow, but keep for compatibility
       needsHumanInput: false,
       approved: true,
     })

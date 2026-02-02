@@ -240,13 +240,13 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
 
     // Different processing steps for web development
     const steps = formData.type === 'web_development'
-      ? ['Analyzuji zadání...', 'Generuji kód webu...', 'Vytvářím GitHub repo...', 'Nasazuji na Vercel...']
-      : processingSteps
+      ? ['Ukládám úkol...', 'Generuji kód webu...', 'Vytvářím GitHub repo...', 'Nasazuji na Vercel...']
+      : ['Ukládám úkol...', 'Agent pracuje...', 'Supervisor kontroluje...', 'Dokončuji...']
 
-    // Simulate processing steps
+    // More realistic timing - longer intervals
     const stepInterval = setInterval(() => {
       setProcessingStep((prev) => Math.min(prev + 1, steps.length - 1))
-    }, formData.type === 'web_development' ? 3000 : 1500)
+    }, formData.type === 'web_development' ? 15000 : 10000) // 10-15 seconds per step
 
     try {
       // Use different endpoint for web development
@@ -532,7 +532,7 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
 
         {/* PROCESSING STEP */}
         {step === 'processing' && (
-          <div className="py-12">
+          <div className="py-8">
             <div className="flex flex-col items-center gap-6">
               {/* Animated brain icon */}
               <div className="relative">
@@ -545,13 +545,19 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
               <div className="text-center space-y-2">
                 <h3 className="text-lg font-semibold">Agent pracuje</h3>
                 <p className="text-sm text-muted-foreground">
-                  {processingSteps[processingStep]}
+                  {processingStep === 0 ? 'Ukládám úkol...' :
+                   processingStep === 1 ? 'Agent zpracovává zadání...' :
+                   processingStep === 2 ? 'Supervisor kontroluje kvalitu...' :
+                   'Dokončuji výstup...'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Toto může trvat 30-60 sekund
                 </p>
               </div>
 
               {/* Progress steps */}
               <div className="flex gap-2">
-                {processingSteps.map((_, i) => (
+                {[0, 1, 2, 3].map((i) => (
                   <div
                     key={i}
                     className={cn(
@@ -560,6 +566,13 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
                     )}
                   />
                 ))}
+              </div>
+
+              {/* Info about background processing */}
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 text-center max-w-sm">
+                <p className="text-xs text-muted-foreground">
+                  Úkol je uložen. Můžeš zavřít tento dialog - úkol najdeš v sekci <strong>Úkoly</strong> po dokončení.
+                </p>
               </div>
             </div>
           </div>
