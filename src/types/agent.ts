@@ -104,6 +104,7 @@ export type TaskType =
   | 'ads_campaign'
   | 'social_media'
   | 'email_marketing'
+  | 'web_development'
   | 'mvp_creation'
   | 'client_analysis'
   | 'strategy_creation'

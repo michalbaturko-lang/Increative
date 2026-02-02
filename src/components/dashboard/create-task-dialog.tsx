@@ -22,6 +22,8 @@ import {
   Mail,
   LayoutTemplate,
   ChevronRight,
+  ExternalLink,
+  Github,
 } from 'lucide-react'
 import {
   Dialog,
@@ -48,6 +50,7 @@ interface TaskFormData {
   description: string
   priority: TaskPriority
   clientName: string
+  existingUrl?: string
 }
 
 interface TaskResult {
@@ -56,9 +59,14 @@ interface TaskResult {
   output?: string
   question?: string
   feedback?: string
+  // Web developer specific
+  githubUrl?: string
+  vercelUrl?: string
+  projectName?: string
 }
 
 const taskTypes = [
+  { value: 'web_development', label: 'Tvorba webu', icon: <Globe className="h-4 w-4 text-indigo-400" />, special: true },
   { value: 'content_creation', label: 'Tvorba obsahu', icon: <FileText className="h-4 w-4 text-blue-400" /> },
   { value: 'seo_audit', label: 'SEO audit', icon: <Search className="h-4 w-4 text-green-400" /> },
   { value: 'competitor_analysis', label: 'Analýza konkurence', icon: <Users className="h-4 w-4 text-purple-400" /> },
@@ -102,6 +110,7 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
     description: '',
     priority: 'medium',
     clientName: '',
+    existingUrl: '',
   })
   const [result, setResult] = React.useState<TaskResult | null>(null)
   const [processingStep, setProcessingStep] = React.useState(0)
@@ -150,6 +159,7 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
       description: '',
       priority: 'medium',
       clientName: '',
+      existingUrl: '',
     })
     setResult(null)
     setProcessingStep(0)
@@ -167,13 +177,23 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
     setStep('processing')
     setProcessingStep(0)
 
+    // Different processing steps for web development
+    const steps = formData.type === 'web_development'
+      ? ['Analyzuji zadání...', 'Generuji kód webu...', 'Vytvářím GitHub repo...', 'Nasazuji na Vercel...']
+      : processingSteps
+
     // Simulate processing steps
     const stepInterval = setInterval(() => {
-      setProcessingStep((prev) => Math.min(prev + 1, processingSteps.length - 1))
-    }, 1500)
+      setProcessingStep((prev) => Math.min(prev + 1, steps.length - 1))
+    }, formData.type === 'web_development' ? 3000 : 1500)
 
     try {
-      const response = await fetch('/api/agents/execute', {
+      // Use different endpoint for web development
+      const endpoint = formData.type === 'web_development'
+        ? '/api/agents/web-developer'
+        : '/api/agents/execute'
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -182,6 +202,7 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
           description: formData.description,
           clientName: formData.clientName,
           priority: formData.priority,
+          existingUrl: formData.existingUrl,
         }),
       })
 
@@ -195,6 +216,9 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
         output: data.output,
         question: data.question,
         feedback: data.feedback,
+        githubUrl: data.githubUrl,
+        vercelUrl: data.vercelUrl,
+        projectName: data.projectName,
       })
 
       setStep('result')
@@ -355,14 +379,34 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
 
               {/* Description */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Popis</label>
+                <label className="text-sm font-medium">
+                  {formData.type === 'web_development' ? 'Zadání webu' : 'Popis'}
+                </label>
                 <Textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Popiš, co přesně má agent udělat. Čím víc detailů, tím lepší výsledek."
+                  placeholder={formData.type === 'web_development'
+                    ? "Popiš, jaký web má agent vytvořit. Např. typ webu, barevné schéma, sekce, funkce..."
+                    : "Popiš, co přesně má agent udělat. Čím víc detailů, tím lepší výsledek."
+                  }
                   className="min-h-[100px] bg-white/5 border-white/10"
                 />
               </div>
+
+              {/* URL for redesign (web development only) */}
+              {formData.type === 'web_development' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Současný web <span className="text-muted-foreground">(pro redesign)</span>
+                  </label>
+                  <Input
+                    value={formData.existingUrl}
+                    onChange={(e) => setFormData({ ...formData, existingUrl: e.target.value })}
+                    placeholder="https://example.cz (nechte prázdné pro nový web)"
+                    className="bg-white/5 border-white/10"
+                  />
+                </div>
+              )}
 
               {/* Priority */}
               <div className="space-y-2">
@@ -499,6 +543,37 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
                       <p className="text-sm font-medium text-amber-300">Agent se ptá:</p>
                       <p className="text-sm mt-1">{result.question}</p>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Web Development Links */}
+              {formData.type === 'web_development' && (result.vercelUrl || result.githubUrl) && (
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+                  <p className="text-sm font-medium text-emerald-300">Web je připraven!</p>
+                  <div className="flex flex-wrap gap-2">
+                    {result.vercelUrl && (
+                      <a
+                        href={result.vercelUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-sm font-medium"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Otevřít web
+                      </a>
+                    )}
+                    {result.githubUrl && (
+                      <a
+                        href={result.githubUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-sm font-medium"
+                      >
+                        <Github className="h-4 w-4" />
+                        GitHub repo
+                      </a>
+                    )}
                   </div>
                 </div>
               )}

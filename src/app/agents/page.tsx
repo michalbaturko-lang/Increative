@@ -18,6 +18,7 @@ import {
   Zap,
   TrendingUp,
   Settings,
+  Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -105,6 +106,16 @@ const agents: AgentInfo[] = [
     icon: <Mail className="h-6 w-6" />,
     color: 'from-emerald-500 to-teal-500',
     capabilities: ['Newsletter', 'Automatizace', 'Welcome series', 'A/B testing'],
+    stats: { tasksCompleted: 0, avgTime: '-', successRate: 0 },
+  },
+  {
+    id: 'web_developer',
+    name: 'Web Developer',
+    type: 'worker',
+    description: 'Vytváří moderní webové stránky a landing pages. Automaticky nasazuje na GitHub a Vercel.',
+    icon: <Globe className="h-6 w-6" />,
+    color: 'from-indigo-500 to-blue-600',
+    capabilities: ['Landing pages', 'Firemní weby', 'Redesign', 'Vercel deploy'],
     stats: { tasksCompleted: 0, avgTime: '-', successRate: 0 },
   },
 ]
