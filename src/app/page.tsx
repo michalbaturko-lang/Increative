@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { Sidebar, Header } from '@/components/layout'
 import { AgentCard, TaskQueue, StatsCards, PendingQuestions, CreateTaskDialog } from '@/components/dashboard'
+import { useAuth } from '@/components/providers/auth-provider'
 import type { Agent, Task, DashboardStats } from '@/types'
 
 // Static agents - AI agents don't change
@@ -118,6 +119,7 @@ function dbTaskToTask(dbTask: {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth()
   const [createTaskOpen, setCreateTaskOpen] = React.useState(false)
   const [stats, setStats] = React.useState<DashboardStats>({
     tasksToday: 0,
@@ -197,7 +199,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold tracking-tight">
-                Ahoj, Jakube <span className="inline-block animate-pulse">👋</span>
+                Ahoj{user?.full_name ? `, ${user.full_name.split(' ')[0]}` : ''} <span className="inline-block animate-pulse">👋</span>
               </h2>
               <p className="text-muted-foreground">
                 {loading ? (
