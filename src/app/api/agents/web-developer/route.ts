@@ -263,6 +263,7 @@ async function deployToVercel(projectName: string, repoUrl: string): Promise<str
 export async function POST(request: NextRequest) {
   const supabase = createServerClient()
   let taskId: string | null = null
+  let dbError: string | null = null
 
   try {
     const body = await request.json()
@@ -284,11 +285,21 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error('Failed to create task:', error)
+        dbError = `DB Error: ${error.message}`
       } else {
         taskId = newTask.id
       }
-    } catch (dbError) {
-      console.error('Failed to save task to database:', dbError)
+    } catch (dbErr) {
+      console.error('Failed to save task to database:', dbErr)
+      dbError = `DB Exception: ${dbErr instanceof Error ? dbErr.message : 'Unknown'}`
+    }
+
+    // If we couldn't save the task, return error immediately
+    if (!taskId) {
+      return NextResponse.json({
+        success: false,
+        error: dbError || 'Nepodařilo se uložit úkol do databáze. Zkontrolujte SUPABASE_SERVICE_ROLE_KEY.',
+      }, { status: 500 })
     }
 
     // Step 1: Generate website code

@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
 
     const agentType = agentTypeMap[taskType] || 'content_writer'
     const supabase = createServerClient()
+    let dbError: string | null = null
 
     // STEP 1: Save task IMMEDIATELY with 'processing' status
     let taskId: string | null = null
@@ -44,11 +45,21 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error('Failed to create task:', error)
+        dbError = `DB Error: ${error.message}`
       } else {
         taskId = newTask.id
       }
-    } catch (dbError) {
-      console.error('Failed to save task to database:', dbError)
+    } catch (err) {
+      console.error('Failed to save task to database:', err)
+      dbError = `DB Exception: ${err instanceof Error ? err.message : 'Unknown'}`
+    }
+
+    // If we couldn't save the task, return error immediately
+    if (!taskId) {
+      return NextResponse.json({
+        success: false,
+        error: dbError || 'Nepodařilo se uložit úkol do databáze. Zkontrolujte SUPABASE_SERVICE_ROLE_KEY.',
+      }, { status: 500 })
     }
 
     // Build context
