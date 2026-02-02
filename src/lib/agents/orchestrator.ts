@@ -191,6 +191,7 @@ export class AgentOrchestrator {
       client_analysis: ['client_research', 'data_analysis'],
       strategy_creation: ['strategy', 'data_analysis'],
       report_generation: ['data_analysis', 'content_writing'],
+      diagnostics: ['data_analysis'],
       custom: [],
     }
     return mapping[taskType] || []

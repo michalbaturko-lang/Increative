@@ -109,6 +109,7 @@ export type TaskType =
   | 'client_analysis'
   | 'strategy_creation'
   | 'report_generation'
+  | 'diagnostics'
   | 'custom'
 
 export interface Task {

@@ -14,6 +14,7 @@ import {
   Zap,
   ChevronRight,
   History,
+  Activity,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Agenti', href: '/agents', icon: Brain },
   { name: 'Úkoly', href: '/tasks', icon: ListTodo },
+  { name: 'Diagnostika', href: '/diagnostics', icon: Activity },
   { name: 'Historie', href: '/historie', icon: History },
   { name: 'Klienti', href: '/clients', icon: Users },
   { name: 'Knowledge Base', href: '/knowledge', icon: FolderKanban },
