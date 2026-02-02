@@ -17,9 +17,10 @@ import {
   Clock,
   ChevronDown,
   Copy,
-  ExternalLink,
   Filter,
   RefreshCw,
+  Instagram,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -44,9 +45,11 @@ const taskTypeIcons: Record<string, React.ReactNode> = {
   seo_audit: <Search className="h-4 w-4 text-green-400" />,
   competitor_analysis: <Users className="h-4 w-4 text-purple-400" />,
   ads_campaign: <Megaphone className="h-4 w-4 text-orange-400" />,
+  social_media: <Instagram className="h-4 w-4 text-pink-400" />,
+  email_marketing: <Mail className="h-4 w-4 text-emerald-400" />,
   strategy_creation: <Lightbulb className="h-4 w-4 text-yellow-400" />,
   mvp_creation: <Code className="h-4 w-4 text-cyan-400" />,
-  client_analysis: <BarChart3 className="h-4 w-4 text-pink-400" />,
+  client_analysis: <BarChart3 className="h-4 w-4 text-rose-400" />,
   report_generation: <Globe className="h-4 w-4 text-indigo-400" />,
 }
 
@@ -55,6 +58,8 @@ const taskTypeLabels: Record<string, string> = {
   seo_audit: 'SEO audit',
   competitor_analysis: 'Analýza konkurence',
   ads_campaign: 'Reklamní kampaň',
+  social_media: 'Social Media',
+  email_marketing: 'Email Marketing',
   strategy_creation: 'Marketingová strategie',
   mvp_creation: 'MVP / Prototyp',
   client_analysis: 'Analýza klienta',

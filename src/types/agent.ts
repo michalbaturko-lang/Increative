@@ -102,6 +102,8 @@ export type TaskType =
   | 'seo_audit'
   | 'competitor_analysis'
   | 'ads_campaign'
+  | 'social_media'
+  | 'email_marketing'
   | 'mvp_creation'
   | 'client_analysis'
   | 'strategy_creation'

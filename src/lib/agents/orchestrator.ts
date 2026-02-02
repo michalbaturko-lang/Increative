@@ -184,6 +184,8 @@ export class AgentOrchestrator {
       seo_audit: ['seo_analysis', 'data_analysis'],
       competitor_analysis: ['competitor_analysis', 'data_analysis'],
       ads_campaign: ['ads_management', 'data_analysis'],
+      social_media: ['social_media', 'content_writing'],
+      email_marketing: ['content_writing', 'data_analysis'],
       mvp_creation: ['web_development', 'design'],
       client_analysis: ['client_research', 'data_analysis'],
       strategy_creation: ['strategy', 'data_analysis'],

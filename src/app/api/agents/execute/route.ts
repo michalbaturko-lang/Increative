@@ -16,7 +16,9 @@ export async function POST(request: NextRequest) {
       strategy_creation: 'analyst',
       client_analysis: 'analyst',
       report_generation: 'analyst',
-      mvp_creation: 'content_writer', // Will be expanded later
+      mvp_creation: 'content_writer',
+      social_media: 'social_media',
+      email_marketing: 'email_marketing',
       custom: 'content_writer',
     }
 

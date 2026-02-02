@@ -18,6 +18,10 @@ import {
   RefreshCw,
   ArrowLeft,
   Brain,
+  Instagram,
+  Mail,
+  LayoutTemplate,
+  ChevronRight,
 } from 'lucide-react'
 import {
   Dialog,
@@ -59,9 +63,11 @@ const taskTypes = [
   { value: 'seo_audit', label: 'SEO audit', icon: <Search className="h-4 w-4 text-green-400" /> },
   { value: 'competitor_analysis', label: 'Analýza konkurence', icon: <Users className="h-4 w-4 text-purple-400" /> },
   { value: 'ads_campaign', label: 'Reklamní kampaň', icon: <Megaphone className="h-4 w-4 text-orange-400" /> },
+  { value: 'social_media', label: 'Social Media', icon: <Instagram className="h-4 w-4 text-pink-400" /> },
+  { value: 'email_marketing', label: 'Email Marketing', icon: <Mail className="h-4 w-4 text-emerald-400" /> },
   { value: 'strategy_creation', label: 'Marketingová strategie', icon: <Lightbulb className="h-4 w-4 text-yellow-400" /> },
   { value: 'mvp_creation', label: 'MVP / Prototyp', icon: <Code className="h-4 w-4 text-cyan-400" /> },
-  { value: 'client_analysis', label: 'Analýza klienta', icon: <BarChart3 className="h-4 w-4 text-pink-400" /> },
+  { value: 'client_analysis', label: 'Analýza klienta', icon: <BarChart3 className="h-4 w-4 text-rose-400" /> },
   { value: 'report_generation', label: 'Generování reportu', icon: <Globe className="h-4 w-4 text-indigo-400" /> },
 ]
 
@@ -72,10 +78,24 @@ const priorities = [
   { value: 'urgent', label: 'Urgentní', color: 'bg-red-500/20 text-red-400' },
 ]
 
-type DialogStep = 'form' | 'processing' | 'result'
+type DialogStep = 'templates' | 'form' | 'processing' | 'result'
+
+interface Template {
+  id: string
+  name: string
+  description: string | null
+  type: string
+  default_title: string | null
+  default_description: string | null
+  prompt_template: string | null
+  default_priority: string
+  estimated_duration: number | null
+  tags: string[]
+  times_used: number
+}
 
 export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDialogProps) {
-  const [step, setStep] = React.useState<DialogStep>('form')
+  const [step, setStep] = React.useState<DialogStep>('templates')
   const [formData, setFormData] = React.useState<TaskFormData>({
     type: 'content_creation',
     title: '',
@@ -85,6 +105,8 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
   })
   const [result, setResult] = React.useState<TaskResult | null>(null)
   const [processingStep, setProcessingStep] = React.useState(0)
+  const [templates, setTemplates] = React.useState<Template[]>([])
+  const [loadingTemplates, setLoadingTemplates] = React.useState(false)
 
   const processingSteps = [
     'Analyzuji úkol...',
@@ -93,8 +115,35 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
     'Supervisor kontroluje výstup...',
   ]
 
-  const resetDialog = () => {
+  // Fetch templates when dialog opens
+  React.useEffect(() => {
+    if (open && templates.length === 0) {
+      setLoadingTemplates(true)
+      fetch('/api/templates')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setTemplates(data.templates)
+          }
+        })
+        .catch(console.error)
+        .finally(() => setLoadingTemplates(false))
+    }
+  }, [open, templates.length])
+
+  const selectTemplate = (template: Template) => {
+    setFormData({
+      type: template.type as TaskType,
+      title: template.default_title || '',
+      description: template.prompt_template || template.default_description || '',
+      priority: (template.default_priority || 'medium') as TaskPriority,
+      clientName: '',
+    })
     setStep('form')
+  }
+
+  const resetDialog = () => {
+    setStep('templates')
     setFormData({
       type: 'content_creation',
       title: '',
@@ -169,15 +218,100 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className={cn('transition-all duration-300', step === 'result' ? 'max-w-3xl' : 'max-w-xl')} onClose={handleClose}>
+      <DialogContent className={cn('transition-all duration-300', step === 'result' ? 'max-w-3xl' : step === 'templates' ? 'max-w-2xl' : 'max-w-xl')} onClose={handleClose}>
+        {/* TEMPLATES STEP */}
+        {step === 'templates' && (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-violet-500">
+                  <LayoutTemplate className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <DialogTitle>Nový úkol</DialogTitle>
+                  <DialogDescription>Vyber šablonu nebo začni od nuly</DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Quick start button */}
+              <button
+                onClick={() => setStep('form')}
+                className="w-full p-4 rounded-xl border border-dashed border-white/20 hover:border-primary/50 hover:bg-white/5 transition-all group text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 group-hover:bg-primary/20 transition-colors">
+                    <Sparkles className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium">Začít od nuly</p>
+                    <p className="text-sm text-muted-foreground">Vytvoř vlastní úkol bez šablony</p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+              </button>
+
+              {/* Templates */}
+              {templates.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">Nebo vyber šablonu:</p>
+                  <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-2">
+                    {templates.map((template) => {
+                      const typeInfo = taskTypes.find(t => t.value === template.type)
+                      return (
+                        <button
+                          key={template.id}
+                          onClick={() => selectTemplate(template)}
+                          className="p-3 rounded-xl border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-all text-left group"
+                        >
+                          <div className="flex items-start gap-2">
+                            {typeInfo?.icon || <FileText className="h-4 w-4 text-muted-foreground" />}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{template.name}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                                {template.description}
+                              </p>
+                              {template.times_used > 0 && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Použito {template.times_used}x
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {loadingTemplates && (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={handleClose}>
+                Zrušit
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
         {/* FORM STEP */}
         {step === 'form' && (
           <>
             <DialogHeader>
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-violet-500">
-                  <Sparkles className="h-5 w-5 text-white" />
-                </div>
+                <button
+                  onClick={() => setStep('templates')}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
                 <div>
                   <DialogTitle>Nový úkol</DialogTitle>
                   <DialogDescription>Zadej úkol pro AI agenty</DialogDescription>

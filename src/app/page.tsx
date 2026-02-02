@@ -3,191 +3,172 @@
 import * as React from 'react'
 import { Sidebar, Header } from '@/components/layout'
 import { AgentCard, TaskQueue, StatsCards, PendingQuestions, CreateTaskDialog } from '@/components/dashboard'
-import type { Agent, Task, DashboardStats, PendingQuestion } from '@/types'
+import type { Agent, Task, DashboardStats } from '@/types'
 
-// Mock data - will be replaced with real data from Supabase
-const mockAgents: Agent[] = [
+// Static agents - AI agents don't change
+const agents: Agent[] = [
   {
     id: '1',
     name: 'Supervisor',
     role: 'supervisor',
-    status: 'working',
-    capabilities: ['content_writing', 'seo_analysis', 'competitor_analysis', 'ads_management', 'strategy'],
-    currentTaskId: 'task-1',
-    createdAt: new Date(),
-    lastActiveAt: new Date(),
-    stats: { tasksCompleted: 156, tasksInProgress: 3, averageTaskDuration: 25, successRate: 94, learningsContributed: 45 },
-  },
-  {
-    id: '2',
-    name: 'Agent Alpha',
-    role: 'worker',
-    status: 'working',
-    capabilities: ['content_writing', 'seo_analysis', 'strategy'],
-    currentTaskId: 'task-2',
-    createdAt: new Date(),
-    lastActiveAt: new Date(),
-    stats: { tasksCompleted: 89, tasksInProgress: 1, averageTaskDuration: 18, successRate: 91, learningsContributed: 12 },
-  },
-  {
-    id: '3',
-    name: 'Agent Beta',
-    role: 'worker',
-    status: 'waiting',
-    capabilities: ['ads_management', 'data_analysis', 'competitor_analysis'],
-    currentTaskId: 'task-3',
-    createdAt: new Date(),
-    lastActiveAt: new Date(),
-    stats: { tasksCompleted: 67, tasksInProgress: 1, averageTaskDuration: 22, successRate: 88, learningsContributed: 8 },
-  },
-  {
-    id: '4',
-    name: 'Agent Gamma',
-    role: 'worker',
     status: 'idle',
-    capabilities: ['web_development', 'design'],
+    capabilities: ['content_writing', 'seo_analysis', 'competitor_analysis', 'ads_management', 'strategy'],
     currentTaskId: null,
     createdAt: new Date(),
     lastActiveAt: new Date(),
-    stats: { tasksCompleted: 34, tasksInProgress: 0, averageTaskDuration: 45, successRate: 97, learningsContributed: 15 },
+    stats: { tasksCompleted: 0, tasksInProgress: 0, averageTaskDuration: 0, successRate: 0, learningsContributed: 0 },
+  },
+  {
+    id: '2',
+    name: 'Content Writer',
+    role: 'worker',
+    status: 'idle',
+    capabilities: ['content_writing', 'seo_analysis', 'strategy'],
+    currentTaskId: null,
+    createdAt: new Date(),
+    lastActiveAt: new Date(),
+    stats: { tasksCompleted: 0, tasksInProgress: 0, averageTaskDuration: 0, successRate: 0, learningsContributed: 0 },
+  },
+  {
+    id: '3',
+    name: 'SEO Analyst',
+    role: 'worker',
+    status: 'idle',
+    capabilities: ['seo_analysis', 'competitor_analysis', 'data_analysis'],
+    currentTaskId: null,
+    createdAt: new Date(),
+    lastActiveAt: new Date(),
+    stats: { tasksCompleted: 0, tasksInProgress: 0, averageTaskDuration: 0, successRate: 0, learningsContributed: 0 },
+  },
+  {
+    id: '4',
+    name: 'Ads Specialist',
+    role: 'worker',
+    status: 'idle',
+    capabilities: ['ads_management', 'data_analysis', 'strategy'],
+    currentTaskId: null,
+    createdAt: new Date(),
+    lastActiveAt: new Date(),
+    stats: { tasksCompleted: 0, tasksInProgress: 0, averageTaskDuration: 0, successRate: 0, learningsContributed: 0 },
+  },
+  {
+    id: '5',
+    name: 'Social Media',
+    role: 'worker',
+    status: 'idle',
+    capabilities: ['social_media', 'content_writing'],
+    currentTaskId: null,
+    createdAt: new Date(),
+    lastActiveAt: new Date(),
+    stats: { tasksCompleted: 0, tasksInProgress: 0, averageTaskDuration: 0, successRate: 0, learningsContributed: 0 },
+  },
+  {
+    id: '6',
+    name: 'Email Marketing',
+    role: 'worker',
+    status: 'idle',
+    capabilities: ['content_writing', 'data_analysis'],
+    currentTaskId: null,
+    createdAt: new Date(),
+    lastActiveAt: new Date(),
+    stats: { tasksCompleted: 0, tasksInProgress: 0, averageTaskDuration: 0, successRate: 0, learningsContributed: 0 },
   },
 ]
 
-const mockTasks: Task[] = [
-  {
-    id: 'task-1',
-    type: 'seo_audit',
-    title: 'SEO audit pro Beauty Salon Praha',
-    description: 'Kompletní SEO audit webu včetně technické analýzy',
-    status: 'in_progress',
-    priority: 'high',
-    assignedAgentId: '2',
-    supervisorId: '1',
-    clientId: 'client-1',
-    clientName: 'Beauty Salon Praha',
-    progress: 65,
-    steps: [
-      { id: '1', title: 'Crawl webu', description: '', status: 'completed', output: null },
-      { id: '2', title: 'Technická analýza', description: '', status: 'completed', output: null },
-      { id: '3', title: 'Obsahová analýza', description: '', status: 'in_progress', output: null },
-      { id: '4', title: 'Konkurenční analýza', description: '', status: 'pending', output: null },
-      { id: '5', title: 'Doporučení', description: '', status: 'pending', output: null },
-    ],
-    currentStepIndex: 2,
-    messages: [],
-    pendingQuestion: null,
-    output: null,
-    templateId: null,
-    similarTaskIds: [],
-    createdAt: new Date(Date.now() - 3600000),
-    startedAt: new Date(Date.now() - 3000000),
-    completedAt: null,
-    estimatedDuration: 30,
-  },
-  {
-    id: 'task-2',
-    type: 'content_creation',
-    title: 'Produktové popisky pro e-shop ModaStyle',
-    description: 'Vytvořit poutavé popisky pro 15 nových produktů',
-    status: 'needs_input',
-    priority: 'medium',
-    assignedAgentId: '3',
-    supervisorId: '1',
-    clientId: 'client-2',
-    clientName: 'ModaStyle',
-    progress: 40,
-    steps: [
-      { id: '1', title: 'Analýza produktů', description: '', status: 'completed', output: null },
-      { id: '2', title: 'Tone of voice', description: '', status: 'completed', output: null },
-      { id: '3', title: 'Psaní popisků', description: '', status: 'in_progress', output: null },
-    ],
-    currentStepIndex: 2,
-    messages: [],
-    pendingQuestion: {
-      id: 'q-1',
-      question: 'Jaký styl komunikace preferujete pro luxusní produkty? Formální nebo casual?',
-      context: 'Produkty v kategorii "Premium Collection" mohou mít různý přístup.',
-      options: ['Formální & elegantní', 'Casual & přátelský', 'Mix obou stylů'],
-      askedAt: new Date(Date.now() - 1800000),
-      askedBy: 'agent',
-    },
-    output: null,
-    templateId: null,
-    similarTaskIds: [],
-    createdAt: new Date(Date.now() - 7200000),
-    startedAt: new Date(Date.now() - 6000000),
-    completedAt: null,
-    estimatedDuration: 45,
-  },
-  {
-    id: 'task-3',
-    type: 'ads_campaign',
-    title: 'Google Ads kampaň - Fitness centrum',
-    description: 'Nastavení PPC kampaně pro nové fitness centrum',
-    status: 'queued',
-    priority: 'urgent',
+// Convert DB task to frontend Task format
+function dbTaskToTask(dbTask: {
+  id: string
+  type: string
+  title: string
+  description: string | null
+  status: string
+  priority: string
+  client_name: string | null
+  agent_type: string | null
+  output: string | null
+  feedback: string | null
+  needs_review: boolean
+  created_at: string
+  completed_at: string | null
+}): Task {
+  return {
+    id: dbTask.id,
+    type: dbTask.type as Task['type'],
+    title: dbTask.title,
+    description: dbTask.description || '',
+    status: dbTask.status === 'needs_review' ? 'under_review' : dbTask.status as Task['status'],
+    priority: dbTask.priority as Task['priority'],
     assignedAgentId: null,
     supervisorId: '1',
-    clientId: 'client-3',
-    clientName: 'FitLife Gym',
-    progress: 0,
+    clientId: null,
+    clientName: dbTask.client_name || null,
+    progress: dbTask.status === 'completed' ? 100 : 0,
     steps: [],
     currentStepIndex: 0,
     messages: [],
     pendingQuestion: null,
-    output: null,
+    output: dbTask.output ? { type: 'text' as const, content: dbTask.output, files: [], metadata: {} } : null,
     templateId: null,
     similarTaskIds: [],
-    createdAt: new Date(Date.now() - 600000),
-    startedAt: null,
-    completedAt: null,
-    estimatedDuration: 60,
-  },
-  {
-    id: 'task-4',
-    type: 'competitor_analysis',
-    title: 'Analýza konkurence - realitní trh Praha',
-    description: 'Mapování konkurentů v oblasti realitních služeb',
-    status: 'in_progress',
-    priority: 'medium',
-    assignedAgentId: '2',
-    supervisorId: '1',
-    clientId: 'client-4',
-    clientName: 'Prague Realty',
-    progress: 30,
-    steps: [
-      { id: '1', title: 'Identifikace konkurentů', description: '', status: 'completed', output: null },
-      { id: '2', title: 'Analýza webů', description: '', status: 'in_progress', output: null },
-      { id: '3', title: 'Analýza marketingu', description: '', status: 'pending', output: null },
-    ],
-    currentStepIndex: 1,
-    messages: [],
-    pendingQuestion: null,
-    output: null,
-    templateId: null,
-    similarTaskIds: [],
-    createdAt: new Date(Date.now() - 5400000),
-    startedAt: new Date(Date.now() - 4800000),
-    completedAt: null,
-    estimatedDuration: 40,
-  },
-]
-
-const mockStats: DashboardStats = {
-  tasksToday: 12,
-  tasksThisWeek: 47,
-  averageCompletionTime: 28,
-  activeClients: 23,
-  opportunitiesDetected: 8,
-  knowledgeEntries: 156,
+    createdAt: new Date(dbTask.created_at),
+    startedAt: new Date(dbTask.created_at),
+    completedAt: dbTask.completed_at ? new Date(dbTask.completed_at) : null,
+    estimatedDuration: 30,
+  }
 }
-
-const mockPendingQuestions = mockTasks
-  .filter(t => t.pendingQuestion)
-  .map(t => ({ task: t, question: t.pendingQuestion! }))
 
 export default function DashboardPage() {
   const [createTaskOpen, setCreateTaskOpen] = React.useState(false)
+  const [stats, setStats] = React.useState<DashboardStats>({
+    tasksToday: 0,
+    tasksThisWeek: 0,
+    averageCompletionTime: 0,
+    activeClients: 0,
+    opportunitiesDetected: 0,
+    knowledgeEntries: 0,
+  })
+  const [recentTasks, setRecentTasks] = React.useState<Task[]>([])
+  const [pendingReviewTasks, setPendingReviewTasks] = React.useState<Task[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  const fetchDashboardData = React.useCallback(async () => {
+    try {
+      const response = await fetch('/api/stats')
+      const data = await response.json()
+
+      if (data.success) {
+        setStats(data.stats)
+        setRecentTasks(data.recentTasks.map(dbTaskToTask))
+        setPendingReviewTasks(data.pendingReview.map(dbTaskToTask))
+      }
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    fetchDashboardData()
+  }, [fetchDashboardData])
+
+  const handleTaskComplete = () => {
+    // Refresh dashboard data after task completion
+    fetchDashboardData()
+  }
+
+  // Generate pending questions from tasks that need review
+  const pendingQuestions = pendingReviewTasks.map(task => ({
+    task,
+    question: {
+      id: `q-${task.id}`,
+      question: 'Tento úkol vyžaduje vaši kontrolu a schválení.',
+      context: task.output?.content ? 'Výstup je připraven ke kontrole.' : '',
+      options: ['Schválit', 'Zamítnout', 'Upravit'],
+      askedAt: task.createdAt,
+      askedBy: 'supervisor' as const,
+    },
+  }))
 
   return (
     <div className="relative min-h-screen bg-background">
@@ -195,10 +176,7 @@ export default function DashboardPage() {
       <CreateTaskDialog
         open={createTaskOpen}
         onOpenChange={setCreateTaskOpen}
-        onSubmit={(task, result) => {
-          console.log('Task completed:', task, result)
-          // TODO: Save to Supabase
-        }}
+        onSubmit={handleTaskComplete}
       />
       {/* Background gradient orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -222,8 +200,14 @@ export default function DashboardPage() {
                 Ahoj, Jakube <span className="inline-block animate-pulse">👋</span>
               </h2>
               <p className="text-muted-foreground">
-                Dnes máš <span className="font-medium text-foreground">3 čekající otázky</span> a{' '}
-                <span className="font-medium text-foreground">4 aktivní úkoly</span>.
+                {loading ? (
+                  'Načítám data...'
+                ) : (
+                  <>
+                    Dnes máš <span className="font-medium text-foreground">{stats.tasksToday} úkolů</span> a{' '}
+                    <span className="font-medium text-foreground">{pendingReviewTasks.length} ke kontrole</span>.
+                  </>
+                )}
               </p>
             </div>
             <div className="hidden sm:flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2">
@@ -233,20 +217,22 @@ export default function DashboardPage() {
           </div>
 
           {/* Stats */}
-          <StatsCards stats={mockStats} />
+          <StatsCards stats={stats} />
 
           {/* Pending Questions - prominently displayed */}
-          <PendingQuestions items={mockPendingQuestions} />
+          {pendingQuestions.length > 0 && (
+            <PendingQuestions items={pendingQuestions} />
+          )}
 
           <div className="grid gap-6 lg:grid-cols-3">
             {/* Agents */}
             <div className="lg:col-span-1 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Agenti</h2>
-                <span className="text-xs text-muted-foreground">{mockAgents.length} aktivních</span>
+                <span className="text-xs text-muted-foreground">{agents.length} aktivních</span>
               </div>
               <div className="space-y-3">
-                {mockAgents.map((agent, index) => (
+                {agents.map((agent, index) => (
                   <div key={agent.id} className="fade-in" style={{ animationDelay: `${index * 100}ms` }}>
                     <AgentCard agent={agent} compact />
                   </div>
@@ -256,7 +242,7 @@ export default function DashboardPage() {
 
             {/* Task Queue */}
             <div className="lg:col-span-2">
-              <TaskQueue tasks={mockTasks} />
+              <TaskQueue tasks={recentTasks} />
             </div>
           </div>
         </main>
