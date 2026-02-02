@@ -17,7 +17,7 @@ import {
   Mail,
   BarChart3,
 } from 'lucide-react'
-import { Header } from '@/components/layout/header'
+import { Sidebar, Header } from '@/components/layout'
 import { Button } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
@@ -139,10 +139,18 @@ export default function DiagnosticsPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header title="Diagnostika" subtitle="Testování a hodnocení všech agentů" />
+    <div className="relative min-h-screen bg-background">
+      {/* Background effects */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/20 blur-[100px]" />
+        <div className="absolute top-1/2 -left-40 h-80 w-80 rounded-full bg-violet-500/20 blur-[100px]" />
+      </div>
 
-      <main className="flex-1 p-6 space-y-6">
+      <Sidebar />
+      <div className="relative pl-64">
+        <Header title="Diagnostika" subtitle="Testování a hodnocení všech agentů" />
+
+        <main className="p-6 space-y-6">
         {/* Run Diagnostics Section */}
         <div className="rounded-xl border border-white/10 bg-white/5 p-6">
           <div className="flex items-center justify-between">
@@ -344,7 +352,8 @@ export default function DiagnosticsPage() {
             </p>
           </div>
         )}
-      </main>
+        </main>
+      </div>
     </div>
   )
 }
