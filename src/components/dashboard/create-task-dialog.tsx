@@ -117,18 +117,10 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
     existingUrl: '',
   })
   const [result, setResult] = React.useState<TaskResult | null>(null)
-  const [processingStep, setProcessingStep] = React.useState(0)
   const [templates, setTemplates] = React.useState<Template[]>([])
   const [loadingTemplates, setLoadingTemplates] = React.useState(false)
   const [answerText, setAnswerText] = React.useState('')
   const [isAnswering, setIsAnswering] = React.useState(false)
-
-  const processingSteps = [
-    'Analyzuji úkol...',
-    'Agent pracuje autonomně...',
-    'Supervisor kontroluje kvalitu...',
-    'Finalizuji výstup...',
-  ]
 
   // Fetch templates when dialog opens
   React.useEffect(() => {
@@ -168,7 +160,6 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
       existingUrl: '',
     })
     setResult(null)
-    setProcessingStep(0)
     setAnswerText('')
     setIsAnswering(false)
   }
@@ -184,11 +175,6 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
 
     setIsAnswering(true)
     setStep('processing')
-    setProcessingStep(0)
-
-    const stepInterval = setInterval(() => {
-      setProcessingStep((prev) => Math.min(prev + 1, processingSteps.length - 1))
-    }, 1500)
 
     try {
       const response = await fetch('/api/agents/execute', {
@@ -202,8 +188,6 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
           priority: formData.priority,
         }),
       })
-
-      clearInterval(stepInterval)
 
       const data = await response.json()
 
@@ -219,7 +203,6 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
       setAnswerText('')
       onSubmit?.(formData, data)
     } catch (error) {
-      clearInterval(stepInterval)
       setResult({
         success: false,
         status: 'error',
@@ -236,17 +219,6 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
     if (!formData.title.trim()) return
 
     setStep('processing')
-    setProcessingStep(0)
-
-    // Different processing steps for web development
-    const steps = formData.type === 'web_development'
-      ? ['Ukládám úkol...', 'Generuji kód webu...', 'Vytvářím GitHub repo...', 'Nasazuji na Vercel...']
-      : ['Ukládám úkol...', 'Agent pracuje...', 'Supervisor kontroluje...', 'Dokončuji...']
-
-    // More realistic timing - longer intervals
-    const stepInterval = setInterval(() => {
-      setProcessingStep((prev) => Math.min(prev + 1, steps.length - 1))
-    }, formData.type === 'web_development' ? 15000 : 10000) // 10-15 seconds per step
 
     try {
       // Use different endpoint for web development
@@ -267,8 +239,6 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
         }),
       })
 
-      clearInterval(stepInterval)
-
       const data = await response.json()
 
       setResult({
@@ -287,7 +257,6 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
       setStep('result')
       onSubmit?.(formData, data)
     } catch (error) {
-      clearInterval(stepInterval)
       setResult({
         success: false,
         status: 'error',
@@ -545,27 +514,22 @@ export function CreateTaskDialog({ open, onOpenChange, onSubmit }: CreateTaskDia
               <div className="text-center space-y-2">
                 <h3 className="text-lg font-semibold">Agent pracuje</h3>
                 <p className="text-sm text-muted-foreground">
-                  {processingStep === 0 ? 'Ukládám úkol...' :
-                   processingStep === 1 ? 'Agent zpracovává zadání...' :
-                   processingStep === 2 ? 'Supervisor kontroluje kvalitu...' :
-                   'Dokončuji výstup...'}
+                  {formData.type === 'web_development'
+                    ? 'Generuji kód, vytvářím repo a nasazuji na Vercel...'
+                    : 'Agent zpracovává úkol, Supervisor kontroluje kvalitu...'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Toto může trvat 30-60 sekund
+                  {formData.type === 'web_development'
+                    ? 'Toto může trvat 1-2 minuty'
+                    : 'Toto může trvat 30-60 sekund'}
                 </p>
               </div>
 
-              {/* Progress steps */}
-              <div className="flex gap-2">
-                {[0, 1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      'h-1.5 w-8 rounded-full transition-all duration-500',
-                      i <= processingStep ? 'bg-primary' : 'bg-white/10'
-                    )}
-                  />
-                ))}
+              {/* Simple loading indicator */}
+              <div className="flex items-center gap-1">
+                <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
 
               {/* Info about background processing */}
