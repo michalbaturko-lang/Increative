@@ -174,7 +174,6 @@ export async function performTechnicalAudit(
 
 URL: ${websiteAnalysis.crawl.url}
 Tech Stack: ${websiteAnalysis.crawl.techStack.join(', ')}
-Load Time: ${websiteAnalysis.crawl.loadTime}ms
 
 PageSpeed Insights:
 ${websiteAnalysis.pageSpeed ? `
@@ -182,16 +181,16 @@ ${websiteAnalysis.pageSpeed ? `
 - Accessibility: ${websiteAnalysis.pageSpeed.accessibility}/100
 - Best Practices: ${websiteAnalysis.pageSpeed.bestPractices}/100
 - SEO: ${websiteAnalysis.pageSpeed.seo}/100
-- FCP: ${websiteAnalysis.pageSpeed.metrics.firstContentfulPaint}
-- LCP: ${websiteAnalysis.pageSpeed.metrics.largestContentfulPaint}
-- TBT: ${websiteAnalysis.pageSpeed.metrics.totalBlockingTime}
-- CLS: ${websiteAnalysis.pageSpeed.metrics.cumulativeLayoutShift}
+- FCP: ${websiteAnalysis.pageSpeed.fcp}
+- LCP: ${websiteAnalysis.pageSpeed.lcp}
+- TBT: ${websiteAnalysis.pageSpeed.tbt}
+- CLS: ${websiteAnalysis.pageSpeed.cls}
 ` : 'Nedostupné'}
 
 Meta:
 - Title: ${websiteAnalysis.crawl.title} (${websiteAnalysis.crawl.title?.length || 0} znaků)
 - Description: ${websiteAnalysis.crawl.description} (${websiteAnalysis.crawl.description?.length || 0} znaků)
-- Canonical: ${websiteAnalysis.crawl.canonical || 'Není'}
+- Canonical: ${websiteAnalysis.crawl.meta?.canonical || 'Není'}
 
 Odpověz POUZE validním JSON:
 {

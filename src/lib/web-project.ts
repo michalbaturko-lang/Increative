@@ -20,6 +20,7 @@ export interface ProjectBrief {
   features: string[] // Parsed feature list
   style?: 'dark' | 'light' | 'auto'
   mood?: string[] // modern, interactive, minimalist, etc.
+  industry?: string // Industry/sector
 }
 
 export interface DesignConcept {
