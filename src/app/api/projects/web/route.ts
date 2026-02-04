@@ -256,8 +256,8 @@ export async function POST(request: NextRequest) {
             .from('web_projects')
             .update({
               status: 'revising',
-              feedback: supabase.rpc ? [feedback] : [feedback], // Append to array
-              iterations: 1, // Increment
+              feedback: [feedback],
+              iterations: 1,
               updated_at: new Date().toISOString(),
             })
             .eq('id', projectId)
