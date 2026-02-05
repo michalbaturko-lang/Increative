@@ -32,10 +32,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   React.useEffect(() => {
-    // Check initial session
+    // Check initial session with timeout
     const checkSession = async () => {
       try {
-        const profile = await getCurrentProfile()
+        // Add timeout to prevent infinite loading
+        const timeoutPromise = new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error('Auth timeout')), 10000)
+        )
+
+        const profile = await Promise.race([
+          getCurrentProfile(),
+          timeoutPromise
+        ]) as Awaited<ReturnType<typeof getCurrentProfile>>
+
         setUser(profile)
 
         // Redirect to login if not authenticated and not already on login page
@@ -44,6 +53,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.error('Auth error:', error)
+        // On timeout or error, redirect to login
+        if (pathname !== '/login') {
+          router.push('/login')
+        }
       } finally {
         setLoading(false)
       }
