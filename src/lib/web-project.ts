@@ -10,6 +10,45 @@ import { analyzeWebsite, WebsiteAnalysis } from './web-tools'
 import { createMeshyClient } from './meshy'
 
 // ============================================
+// RATE LIMIT HANDLING
+// ============================================
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Wrapper pro Claude API volání s retry logikou při rate limit
+ */
+async function callWithRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 5,
+  initialDelay: number = 2000
+): Promise<T> {
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error: unknown) {
+      lastError = error as Error
+      const errorMessage = lastError?.message || String(error)
+
+      // Check if it's a rate limit error
+      if (errorMessage.includes('rate_limit') || errorMessage.includes('429')) {
+        const delay = initialDelay * Math.pow(2, attempt) // Exponential backoff
+        console.log(`Rate limit hit, waiting ${delay}ms before retry ${attempt + 1}/${maxRetries}`)
+        await sleep(delay)
+        continue
+      }
+
+      // Not a rate limit error, throw immediately
+      throw error
+    }
+  }
+
+  throw lastError || new Error('Max retries exceeded')
+}
+
+// ============================================
 // TYPES
 // ============================================
 
@@ -90,7 +129,7 @@ export interface ProjectState {
 // ============================================
 
 export async function parseBrief(rawBrief: string): Promise<ProjectBrief> {
-  const response = await anthropic.messages.create({
+  const response = await callWithRetry(() => anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 2048,
     messages: [{
@@ -117,7 +156,7 @@ Pro features extrahuj všechny požadavky jako:
 - "Tmavý design"
 - atd.`,
     }],
-  })
+  }))
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
   const jsonMatch = text.match(/\{[\s\S]*\}/)
@@ -160,7 +199,7 @@ ANALÝZA SOUČASNÉHO WEBU:
       ? 'Všechny návrhy by měly být světlé.'
       : 'Nabídni mix světlých a tmavých variant.'
 
-  const response = await anthropic.messages.create({
+  const response = await callWithRetry(() => anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4096,
     messages: [{
@@ -208,7 +247,7 @@ Odpověz POUZE validním JSON:
   ]
 }`,
     }],
-  })
+  }))
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
   const jsonMatch = text.match(/\{[\s\S]*\}/)
@@ -229,7 +268,7 @@ export async function planSections(
   brief: ProjectBrief,
   chosenDesign: DesignConcept
 ): Promise<ProjectSection[]> {
-  const response = await anthropic.messages.create({
+  const response = await callWithRetry(() => anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4096,
     messages: [{
@@ -269,7 +308,7 @@ Odpověz POUZE validním JSON:
   ]
 }`,
     }],
-  })
+  }))
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
   const jsonMatch = text.match(/\{[\s\S]*\}/)
@@ -289,10 +328,11 @@ Odpověz POUZE validním JSON:
 export async function generateBlogArticles(
   brief: ProjectBrief,
   count: number = 10,
-  topic?: string
+  topic?: string,
+  onProgress?: (current: number, total: number, title: string) => void
 ): Promise<BlogArticle[]> {
   // First, generate article topics
-  const topicsResponse = await anthropic.messages.create({
+  const topicsResponse = await callWithRetry(() => anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 2048,
     messages: [{
@@ -320,7 +360,7 @@ Odpověz POUZE validním JSON:
   ]
 }`,
     }],
-  })
+  }))
 
   const topicsText = topicsResponse.content[0].type === 'text' ? topicsResponse.content[0].text : ''
   const topicsMatch = topicsText.match(/\{[\s\S]*\}/)
@@ -330,18 +370,26 @@ Odpověz POUZE validním JSON:
   const { topics } = JSON.parse(topicsMatch[0])
   const articles: BlogArticle[] = []
 
-  // Generate each article (in parallel for speed)
-  const articlePromises = topics.slice(0, count).map(async (topic: { title: string; slug: string; keywords: string[]; outline: string }) => {
-    const articleResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      messages: [{
-        role: 'user',
-        content: `Napiš SEO optimalizovaný blogový článek.
+  // Generate articles SEQUENTIALLY to avoid rate limits
+  for (let i = 0; i < Math.min(topics.length, count); i++) {
+    const articleTopic = topics[i] as { title: string; slug: string; keywords: string[]; outline: string }
 
-TÉMA: ${topic.title}
-KEYWORDS: ${topic.keywords.join(', ')}
-OUTLINE: ${topic.outline}
+    // Notify progress
+    if (onProgress) {
+      onProgress(i + 1, count, articleTopic.title)
+    }
+
+    try {
+      const articleResponse = await callWithRetry(() => anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: `Napiš SEO optimalizovaný blogový článek.
+
+TÉMA: ${articleTopic.title}
+KEYWORDS: ${articleTopic.keywords.join(', ')}
+OUTLINE: ${articleTopic.outline}
 
 Napiš článek cca 800-1200 slov, který:
 - Je SEO optimalizovaný
@@ -351,27 +399,34 @@ Napiš článek cca 800-1200 slov, který:
 
 Odpověz POUZE validním JSON:
 {
-  "title": "${topic.title}",
-  "slug": "${topic.slug}",
+  "title": "${articleTopic.title}",
+  "slug": "${articleTopic.slug}",
   "metaDescription": "Meta description (max 160 znaků)",
-  "keywords": ${JSON.stringify(topic.keywords)},
+  "keywords": ${JSON.stringify(articleTopic.keywords)},
   "content": "Celý obsah článku v markdown formátu",
   "estimatedReadTime": 5
 }`,
-      }],
-    })
+        }],
+      }))
 
-    const articleText = articleResponse.content[0].type === 'text' ? articleResponse.content[0].text : ''
-    const articleMatch = articleText.match(/\{[\s\S]*\}/)
+      const articleText = articleResponse.content[0].type === 'text' ? articleResponse.content[0].text : ''
+      const articleMatch = articleText.match(/\{[\s\S]*\}/)
 
-    if (articleMatch) {
-      return JSON.parse(articleMatch[0]) as BlogArticle
+      if (articleMatch) {
+        articles.push(JSON.parse(articleMatch[0]) as BlogArticle)
+      }
+
+      // Small delay between articles to avoid rate limits
+      if (i < count - 1) {
+        await sleep(1000)
+      }
+    } catch (error) {
+      console.error(`Failed to generate article ${i + 1}:`, error)
+      // Continue with other articles even if one fails
     }
-    return null
-  })
+  }
 
-  const results = await Promise.all(articlePromises)
-  return results.filter((a): a is BlogArticle => a !== null)
+  return articles
 }
 
 // ============================================
@@ -425,9 +480,9 @@ export async function generateWebsiteCode(
   sections: ProjectSection[],
   articles: BlogArticle[]
 ): Promise<Record<string, string>> {
-  const response = await anthropic.messages.create({
+  const response = await callWithRetry(() => anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 16384,
+    max_tokens: 8192, // Reduced to help with rate limits
     system: AGENT_PROMPTS.web_developer,
     messages: [{
       role: 'user',
@@ -490,7 +545,7 @@ Odpověz POUZE validním JSON:
   }
 }`,
     }],
-  })
+  }))
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
 
@@ -529,9 +584,9 @@ export async function reviseCode(
 
   const refinedFeedback = reviewResult.feedback || feedback
 
-  const response = await anthropic.messages.create({
+  const response = await callWithRetry(() => anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 16384,
+    max_tokens: 8192, // Reduced to help with rate limits
     system: AGENT_PROMPTS.web_developer,
     messages: [{
       role: 'user',
@@ -563,7 +618,7 @@ Odpověz POUZE validním JSON:
   "changes": ["Popis změny 1", "Popis změny 2"]
 }`,
     }],
-  })
+  }))
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
   const jsonMatch = text.match(/\{[\s\S]*\}/)

@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
         // ============================================
         sendStep('generate_articles', 'running')
         sendLog(`Generuji ${articleCount} blogových článků...`)
-        sendLog('Toto může trvat několik minut...')
+        sendLog('Články se generují postupně (kvůli rate limitům API)...')
 
         let blogArticles
         try {
@@ -169,16 +169,23 @@ export async function GET(request: NextRequest) {
             sendLog(`Téma článků: ${topic}`)
           }
 
-          blogArticles = await generateBlogArticles(brief, articleCount, topic)
+          // Use progress callback for real-time updates
+          blogArticles = await generateBlogArticles(brief, articleCount, topic, (current, total, title) => {
+            sendLog(`Generuji článek ${current}/${total}: ${title}`)
+          })
 
           blogArticles.forEach((article, i) => {
-            sendLog(`Článek ${i + 1}: ${article.title}`, 'success')
+            sendLog(`✓ Článek ${i + 1}: ${article.title}`, 'success')
           })
 
           sendStep('generate_articles', 'completed', `${blogArticles.length} článků vygenerováno`)
           sendEvent('articles', blogArticles.map(a => ({ title: a.title, slug: a.slug })))
         } catch (error) {
-          sendLog(`Chyba při generování článků: ${error}`, 'error')
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          if (errorMsg.includes('rate_limit') || errorMsg.includes('429')) {
+            sendLog(`Rate limit - systém se pokusí pokračovat po pauze...`, 'warning')
+          }
+          sendLog(`Chyba při generování článků: ${errorMsg}`, 'error')
           sendStep('generate_articles', 'error')
           throw error
         }
@@ -189,6 +196,7 @@ export async function GET(request: NextRequest) {
         sendStep('generate_code', 'running')
         sendLog('Generuji kód webu...')
         sendLog('Next.js 14, TypeScript, Tailwind CSS...')
+        sendLog('Toto může trvat déle (rate limit handling)...')
 
         let files
         try {
@@ -211,7 +219,11 @@ export async function GET(request: NextRequest) {
             files: files
           })
         } catch (error) {
-          sendLog(`Chyba při generování kódu: ${error}`, 'error')
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          if (errorMsg.includes('rate_limit') || errorMsg.includes('429')) {
+            sendLog(`Rate limit dosažen - zkuste znovu za minutu`, 'warning')
+          }
+          sendLog(`Chyba při generování kódu: ${errorMsg}`, 'error')
           sendStep('generate_code', 'error')
           throw error
         }
