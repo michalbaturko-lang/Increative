@@ -22,43 +22,27 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<UserProfile | null>(null)
-  const [loading, setLoading] = React.useState(true)
+  const [loading, setLoading] = React.useState(false) // Start with false - no auth required
   const router = useRouter()
   const pathname = usePathname()
 
   const refreshProfile = React.useCallback(async () => {
-    const profile = await getCurrentProfile()
-    setUser(profile)
+    try {
+      const profile = await getCurrentProfile()
+      setUser(profile)
+    } catch {
+      // Ignore auth errors - auth is optional
+    }
   }, [])
 
   React.useEffect(() => {
-    // Check initial session with timeout
+    // Try to get profile but don't block if not authenticated
     const checkSession = async () => {
       try {
-        // Add timeout to prevent infinite loading
-        const timeoutPromise = new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error('Auth timeout')), 10000)
-        )
-
-        const profile = await Promise.race([
-          getCurrentProfile(),
-          timeoutPromise
-        ]) as Awaited<ReturnType<typeof getCurrentProfile>>
-
+        const profile = await getCurrentProfile()
         setUser(profile)
-
-        // Redirect to login if not authenticated and not already on login page
-        if (!profile && pathname !== '/login') {
-          router.push('/login')
-        }
-      } catch (error) {
-        console.error('Auth error:', error)
-        // On timeout or error, redirect to login
-        if (pathname !== '/login') {
-          router.push('/login')
-        }
-      } finally {
-        setLoading(false)
+      } catch {
+        // Auth is optional - just continue without user
       }
     }
 
@@ -75,7 +59,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null)
-          router.push('/login')
         }
       }
     )
@@ -85,15 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, router, refreshProfile])
 
-  // Show nothing while checking auth on protected routes
-  if (loading && pathname !== '/login') {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Načítám...</div>
-      </div>
-    )
-  }
-
+  // No loading state - render children immediately
   return (
     <AuthContext.Provider value={{ user, loading, refreshProfile }}>
       {children}
